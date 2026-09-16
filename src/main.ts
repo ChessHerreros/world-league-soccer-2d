@@ -47,12 +47,27 @@ netManager.onRoomUpdated((room) => {
   }
 });
 
-netManager.onGameStarted((_room) => {
+netManager.onGameStarted((room) => {
   menu.hideOverlay();
   game.setOnlineNetworkManager(netManager);
+
+  const localSocketId = netManager.getSocket()?.id;
+  const playerList: any[] = Array.isArray(room?.players)
+    ? room.players
+    : room?.players && typeof room.players === "object"
+    ? Object.values(room.players)
+    : [];
+
+  const hostObj = playerList.find((p: any) => p.id === room?.hostId || p.socketId === room?.hostId) || playerList[0];
+  const guestObj = playerList.find((p: any) => p.id !== room?.hostId && p.socketId !== room?.hostId) || playerList[1];
+
+  const myName = menu.getPlayerName() || "Jugador";
+  const hostName = hostObj?.name || "Host";
+  const guestName = guestObj?.name || "Invitado";
+
   game.configureAndStart({
     mode: "ONLINE",
-    duration: 180,
+    duration: room?.duration || 180,
     goalLimit: 5,
     skinIndex: 0,
     jerseyNumber: 10,
@@ -60,8 +75,11 @@ netManager.onGameStarted((_room) => {
     customColor: null,
     borderStyle: "classic",
     pattern: "spain",
+    playerName: myName,
+    hostName: hostName,
+    guestName: guestName,
     isOnline: true,
-  });
+  } as any);
 });
 
 // Network online room handlers from menu

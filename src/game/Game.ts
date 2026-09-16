@@ -199,14 +199,14 @@ export class Game {
         team: "blue",
       });
       hostPlayer.jerseyNumber = config.jerseyNumber || 10;
-      hostPlayer.name = config.playerName || "Host";
+      hostPlayer.name = (config as any).hostName || config.playerName || "Host";
 
       const guestPlayer = new Player({
         position: new Vec2(Math.floor(this.arena.width * 0.78), this.arena.height / 2),
         team: "red",
       });
       guestPlayer.jerseyNumber = 9;
-      guestPlayer.name = "Invitado";
+      guestPlayer.name = (config as any).guestName || "Invitado";
 
       if (this.netManager && !this.netManager.getIsHost()) {
         // Guest puts their own entity at index 0 and Host entity at index 1
