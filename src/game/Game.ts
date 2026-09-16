@@ -171,36 +171,9 @@ export class Game {
       arenaHeight = 600;
       goalWidth = 200;
       this.arena.setSize(arenaWidth, arenaHeight, goalWidth);
-
-      this.players.length = 0;
-      const hostPlayer = new Player({
-        position: new Vec2(Math.floor(this.arena.width * 0.22), this.arena.height / 2),
-        team: "blue",
-      });
-      hostPlayer.jerseyNumber = config.jerseyNumber || 10;
-      hostPlayer.name = (config as any).hostName || config.playerName || "Host";
-
-      const guestPlayer = new Player({
-        position: new Vec2(Math.floor(this.arena.width * 0.78), this.arena.height / 2),
-        team: "red",
-      });
-      guestPlayer.jerseyNumber = 9;
-      guestPlayer.name = (config as any).guestName || "Invitado";
-
-      if (this.netManager && !this.netManager.getIsHost()) {
-        // Guest puts their own entity at index 0 and Host entity at index 1
-        this.players.push(guestPlayer);
-        this.players.push(hostPlayer);
-      } else {
-        // Host puts Host at index 0 and Guest at index 1
-        this.players.push(hostPlayer);
-        this.players.push(guestPlayer);
-      }
-
       this.options.onScore?.(0, 0);
       this.resetMatchPositions();
       if (!this.running) this.start();
-      return;
     }
 
     // Set arena dimensions dynamically
