@@ -164,26 +164,42 @@ export class Game {
     let arenaHeight = 600;
     let goalWidth = 200;
 
-    if (config.mode === "VS_AI") {
-      teamCount = 1; // 1v1
+    if (config.mode === "ONLINE") {
+      teamCount = 1;
       arenaWidth = 1000;
       arenaHeight = 600;
       goalWidth = 200;
-    } else if (config.mode === "LOCAL_2P") {
-      teamCount = 2; // 2v2
-      arenaWidth = 1300;
-      arenaHeight = 750;
-      goalWidth = 240;
-    } else if (config.mode === "PRACTICE") {
-      teamCount = 3; // 3v3
-      arenaWidth = 1600;
-      arenaHeight = 900;
-      goalWidth = 280;
-    } else if (config.mode === "TOURNAMENT") {
-      teamCount = 4; // 4v4 (Largest Epic Pitch)
-      arenaWidth = 2000;
-      arenaHeight = 1100;
-      goalWidth = 320;
+      this.arena.setSize(arenaWidth, arenaHeight, goalWidth);
+
+      this.players.length = 0;
+      const hostPlayer = new Player({
+        position: new Vec2(Math.floor(this.arena.width * 0.22), this.arena.height / 2),
+        team: "blue",
+      });
+      hostPlayer.jerseyNumber = config.jerseyNumber || 10;
+      hostPlayer.name = config.playerName || "Host";
+
+      const guestPlayer = new Player({
+        position: new Vec2(Math.floor(this.arena.width * 0.78), this.arena.height / 2),
+        team: "red",
+      });
+      guestPlayer.jerseyNumber = 9;
+      guestPlayer.name = "Invitado";
+
+      if (this.netManager && !this.netManager.getIsHost()) {
+        // Guest puts their own entity at index 0 and Host entity at index 1
+        this.players.push(guestPlayer);
+        this.players.push(hostPlayer);
+      } else {
+        // Host puts Host at index 0 and Guest at index 1
+        this.players.push(hostPlayer);
+        this.players.push(guestPlayer);
+      }
+
+      this.options.onScore?.(0, 0);
+      this.resetMatchPositions();
+      if (!this.running) this.start();
+      return;
     }
 
     // Set arena dimensions dynamically
@@ -554,8 +570,8 @@ export class Game {
     this.players.forEach((player, index) => {
       if (index === 0) return; // Skip P1 (handled above)
 
-      if (!this.isDemoMode && this.matchConfig.mode === "LOCAL_2P" && index === this.players.length / 2) {
-        // Human Player 2 controlling first Red team player
+      if (!this.isOnlineMode && !this.isDemoMode && this.matchConfig.mode === "LOCAL_2P" && index === this.players.length / 2) {
+        // Human Player 2 controlling first Red team player in Local 2P
         const p2Movement = this.input.movementP2();
         const p2WantSprint = this.input.down("shift") || this.input.down("r");
         player.update(dt, p2Movement.x, p2Movement.y, p2WantSprint);
@@ -567,8 +583,8 @@ export class Game {
           const p2Move = this.input.movementP2();
           this.performDash(player, p2Move.x, p2Move.y);
         }
-      } else {
-        // AI Bot controlling teammates and opponents!
+      } else if (!this.isOnlineMode) {
+        // AI Bot controlling teammates and opponents in offline modes!
         const botAction = this.botBrain.update(dt, player, this.players, this.ball, this.arena, index);
         player.update(dt, botAction.moveX, botAction.moveY, botAction.sprint);
 

@@ -186,6 +186,11 @@ export class NetworkManager {
 
   onGuestInput(cb: (input: NetworkInput) => void): void {
     this.onGuestInputCb = cb;
+    this.socket?.on("playerInputRelay", (data: any) => {
+      if (this.isHost && data && data.input) {
+        cb(data.input);
+      }
+    });
   }
 
   onRoomUpdated(cb: (room: any) => void): void {

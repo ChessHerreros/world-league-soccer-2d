@@ -311,37 +311,38 @@ io.on("connection", (socket: Socket) => {
   console.log(`[Multiplayer] Client connected: ${socket.id}`);
 
   // Create Room
-  socket.on("createRoom", (data: { playerName: string; config: any }, callback: (res: any) => void) => {
+  socket.on("createRoom", (data: { playerName: string; peerId?: string; config: any }, callback: (res: any) => void) => {
     const code = generateRoomCode();
-    const room: RoomState & { code: string } = {
+    const room: RoomState & { code: string; hostPeerId?: string } = {
       id: code,
       code: code,
       hostId: socket.id,
-      mode: data.config.mode || "ONLINE",
+      hostPeerId: data.peerId,
+      mode: data.config?.mode || "ONLINE",
       status: "lobby",
       blueScore: 0,
       redScore: 0,
-      duration: data.config.duration || 180,
-      timeRemaining: data.config.duration || 180,
+      duration: data.config?.duration || 180,
+      timeRemaining: data.config?.duration || 180,
       isExtraTime: false,
-      ball: { x: 650, y: 375, vx: 0, vy: 0 },
+      ball: { x: 500, y: 300, vx: 0, vy: 0 },
       players: {
         [socket.id]: {
           id: socket.id,
           socketId: socket.id,
           name: data.playerName || "Player 1",
           team: "blue",
-          x: 280,
-          y: 375,
+          x: 220,
+          y: 300,
           vx: 0,
           vy: 0,
           stamina: 100,
           isSprinting: false,
-          jerseyNumber: data.config.jerseyNumber || 10,
-          badgeEmoji: data.config.badgeEmoji || "",
-          customColor: data.config.customColor || null,
-          borderStyle: data.config.borderStyle || "classic",
-          pattern: data.config.pattern || "spain",
+          jerseyNumber: data.config?.jerseyNumber || 10,
+          badgeEmoji: data.config?.badgeEmoji || "",
+          customColor: data.config?.customColor || null,
+          borderStyle: data.config?.borderStyle || "classic",
+          pattern: data.config?.pattern || "spain",
           input: { moveX: 0, moveY: 0, sprint: false, kick: false, dribble: null, dash: false }
         }
       }
@@ -353,7 +354,7 @@ io.on("connection", (socket: Socket) => {
   });
 
   // Join Room with Code
-  socket.on("joinRoom", (data: { roomCode: string; playerName: string; config: any }, callback: (res: any) => void) => {
+  socket.on("joinRoom", (data: { roomCode: string; peerId?: string; playerName: string; config: any }, callback: (res: any) => void) => {
     const code = data.roomCode.toUpperCase().trim();
     const room = rooms[code];
 
@@ -361,7 +362,6 @@ io.on("connection", (socket: Socket) => {
       return callback({ success: false, message: "¡Código de sala no encontrado!" });
     }
 
-    // Determine team balancing
     const playerList = Object.values(room.players);
     const blueCount = playerList.filter(p => p.team === "blue").length;
     const redCount = playerList.filter(p => p.team === "red").length;
@@ -372,17 +372,17 @@ io.on("connection", (socket: Socket) => {
       socketId: socket.id,
       name: data.playerName || `Player ${playerList.length + 1}`,
       team: assignedTeam,
-      x: assignedTeam === "blue" ? 280 : 1020,
-      y: 375,
+      x: assignedTeam === "blue" ? 220 : 780,
+      y: 300,
       vx: 0,
       vy: 0,
       stamina: 100,
       isSprinting: false,
-      jerseyNumber: data.config.jerseyNumber || (assignedTeam === "blue" ? 7 : 9),
-      badgeEmoji: data.config.badgeEmoji || "",
-      customColor: data.config.customColor || null,
-      borderStyle: data.config.borderStyle || "classic",
-      pattern: data.config.pattern || "spain",
+      jerseyNumber: data.config?.jerseyNumber || (assignedTeam === "blue" ? 7 : 9),
+      badgeEmoji: data.config?.badgeEmoji || "",
+      customColor: data.config?.customColor || null,
+      borderStyle: data.config?.borderStyle || "classic",
+      pattern: data.config?.pattern || "spain",
       input: { moveX: 0, moveY: 0, sprint: false, kick: false, dribble: null, dash: false }
     };
 
@@ -412,11 +412,19 @@ io.on("connection", (socket: Socket) => {
     }
   });
 
-  // Receive Player Inputs
+  // Relay Host State directly to other players in room
+  socket.on("hostStateUpdate", (data: { roomCode: string; state: any }) => {
+    socket.to(data.roomCode).emit("hostStateUpdate", data.state);
+  });
+
+  // Receive Player Inputs and relay to host
   socket.on("playerInput", (data: { roomCode: string; input: PlayerInput }) => {
     const room = rooms[data.roomCode];
-    if (room && room.players[socket.id]) {
-      room.players[socket.id].input = data.input;
+    if (room) {
+      if (room.players[socket.id]) {
+        room.players[socket.id].input = data.input;
+      }
+      socket.to(data.roomCode).emit("playerInputRelay", { socketId: socket.id, input: data.input });
     }
   });
 
