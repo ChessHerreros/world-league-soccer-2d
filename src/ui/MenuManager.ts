@@ -15,6 +15,7 @@ export interface MatchConfig {
   customColor: string | null;
   borderStyle: "classic" | "gold" | "neon" | "rainbow";
   pattern: "classic" | "halves" | "checker" | "stripes" | "rings" | "sash" | "diamond" | "spain";
+  playerName?: string;
 }
 
 export class MenuManager {
@@ -25,7 +26,8 @@ export class MenuManager {
   private duration: MatchDuration = 180;
   private goalLimit: GoalLimit = 5;
 
-  // Player Disc Customization State
+  // Player Username & Customization State
+  private playerName: string = "Jugador";
   private jerseyNumber = 29;
   private badgeEmoji = "";
   private customColor: string | null = null;
@@ -43,7 +45,46 @@ export class MenuManager {
     this.overlay.id = "menu-overlay";
     document.querySelector("#app")?.appendChild(this.overlay);
 
-    this.showMainMenu();
+    // Retrieve stored username or prompt player
+    const savedName = localStorage.getItem("wls_username");
+    if (savedName && savedName.trim().length > 0) {
+      this.playerName = savedName.trim();
+      this.showMainMenu();
+    } else {
+      this.showUsernameModal();
+    }
+  }
+
+  getPlayerName(): string {
+    return this.playerName;
+  }
+
+  showUsernameModal(): void {
+    this.overlay.style.display = "flex";
+    this.overlay.innerHTML = `
+      <div class="roblox-inv-modal settings-modal-card" style="max-width: 440px; text-align: center;">
+        <div class="roblox-inv-header" style="justify-content: center;">
+          <h2 class="roblox-inv-title">⚽ WORLD LEAGUE SOCCER</h2>
+        </div>
+        <div class="settings-content-stack" style="gap: 16px; margin-top: 10px;">
+          <span class="setting-group-title">INTRODUCE TU NOMBRE DE JUGADOR</span>
+          <input type="text" id="input-username" placeholder="Tu nombre..." maxlength="12" style="width: 100%; padding: 14px; border-radius: 8px; border: 2px solid #3b82f6; background: #0f172a; color: #fff; font-weight: bold; text-align: center; font-size: 1.3rem;">
+          <button id="btn-save-username" class="btn-roblox-kickoff" style="width: 100%;">¡ENTRAR AL JUEGO! ⚽</button>
+        </div>
+      </div>
+    `;
+
+    document.querySelector("#btn-save-username")?.addEventListener("click", () => {
+      const input = this.overlay.querySelector<HTMLInputElement>("#input-username");
+      const name = input?.value.trim();
+      if (name && name.length > 0) {
+        this.playerName = name;
+        localStorage.setItem("wls_username", name);
+        this.showMainMenu();
+      } else {
+        alert("Por favor escribe tu nombre de usuario para continuar.");
+      }
+    });
   }
 
   onOnlineRoom(cb: (action: "create" | "join", roomCode?: string) => void): void {
@@ -135,6 +176,7 @@ export class MenuManager {
         customColor: this.customColor,
         borderStyle: this.borderStyle,
         pattern: this.pattern,
+        playerName: this.playerName,
       });
     });
 

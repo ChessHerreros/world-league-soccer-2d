@@ -154,9 +154,10 @@ export class Game {
       bluePlayer.pattern = config.pattern;
 
       if (i === 0) {
-        // Player 1 exact number/emoji
+        // Player 1 exact number/emoji & username
         bluePlayer.jerseyNumber = config.jerseyNumber;
         bluePlayer.badgeEmoji = config.badgeEmoji;
+        bluePlayer.name = config.playerName || "Jugador";
       } else {
         // Teammates share the uniform style but get distinct numbers/emojis!
         bluePlayer.jerseyNumber = teammateNumbers[(i - 1) % teammateNumbers.length];

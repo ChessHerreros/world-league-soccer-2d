@@ -813,6 +813,18 @@ export class Renderer {
       ctx.fillRect(barX, barY, fillWidth, barHeight);
     }
 
+    // Render player's username in low opacity white text above the disc
+    const displayName = player.name || (isLocalPlayer ? "Jugador" : "");
+    if (displayName.trim().length > 0) {
+      ctx.save();
+      ctx.font = "700 12px 'Outfit', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+      ctx.fillText(displayName, player.position.x, player.position.y - player.radius - 8);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 

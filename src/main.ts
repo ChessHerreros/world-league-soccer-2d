@@ -66,22 +66,22 @@ netManager.onGameStarted((_room) => {
 // Network online room handlers from menu
 menu.onOnlineRoom((action, roomCode) => {
   const activeSocket = netManager.connect();
-  const playerName = "Jugador_" + Math.floor(Math.random() * 899 + 100);
+  const playerName = menu.getPlayerName() || "Jugador_" + Math.floor(Math.random() * 899 + 100);
 
   if (action === "create") {
     netManager.createRoom(playerName, {}, (res) => {
-      if (res.success) {
+      if (res && res.success) {
         menu.showOnlineLobby(res.room, activeSocket.id!, (team) => netManager.switchTeam(team), () => netManager.startGame());
       } else {
-        alert(res.error || "Error al crear sala");
+        alert(res?.error || "Error al crear sala");
       }
     });
   } else if (action === "join" && roomCode) {
     netManager.joinRoom(roomCode, playerName, {}, (res) => {
-      if (res.success) {
+      if (res && res.success) {
         menu.showOnlineLobby(res.room, activeSocket.id!, (team) => netManager.switchTeam(team), () => netManager.startGame());
       } else {
-        alert(res.error || "Error al unirse a la sala");
+        alert(res?.error || "Error al unirse a la sala");
       }
     });
   }

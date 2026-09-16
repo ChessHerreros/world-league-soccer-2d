@@ -43,6 +43,7 @@ export class Player {
   staminaRecoveryRate = 22;
 
   // Customization & Inventory Properties
+  name: string = "";
   jerseyNumber: number = 29;
   badgeEmoji: string = "";
   customColor: string | null = null;
