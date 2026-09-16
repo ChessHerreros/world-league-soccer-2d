@@ -209,8 +209,9 @@ io.on("connection", (socket: Socket) => {
   // Create Room
   socket.on("createRoom", (data: { playerName: string; config: any }, callback: (res: any) => void) => {
     const code = generateRoomCode();
-    const room: RoomState = {
+    const room: RoomState & { code: string } = {
       id: code,
+      code: code,
       hostId: socket.id,
       mode: data.config.mode || "ONLINE",
       status: "lobby",

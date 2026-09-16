@@ -750,11 +750,13 @@ export class MenuManager {
     const bluePlayers = playerList.filter((p: any) => p.team === "blue");
     const redPlayers = playerList.filter((p: any) => p.team === "red");
 
+    const displayCode = room.code || room.id || room.roomCode || "----";
+
     this.overlay.innerHTML = `
       <div class="roblox-inv-modal settings-modal-card" style="max-width: 680px;">
         <div class="roblox-inv-header">
           <button id="btn-back" class="roblox-back-btn">⬅ SALIR</button>
-          <h2 class="roblox-inv-title">SALA: <span style="color: #10b981; font-family: monospace; font-size: 1.8rem; letter-spacing: 3px;">${room.code}</span></h2>
+          <h2 class="roblox-inv-title">SALA: <span style="color: #10b981; font-family: monospace; font-size: 1.8rem; letter-spacing: 3px;">${displayCode}</span></h2>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
