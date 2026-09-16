@@ -17,7 +17,7 @@ export class NetworkManager {
   connect(serverUrl?: string): Socket {
     if (!this.socket) {
       const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const targetUrl = serverUrl || (isLocal ? "http://localhost:3001" : "https://world-league-soccer-2d.onrender.com");
+      const targetUrl = serverUrl || (isLocal ? "http://localhost:3001" : "https://world-league-soccer-2d-eu.onrender.com");
       
       this.socket = io(targetUrl, {
         autoConnect: true,
