@@ -109,10 +109,27 @@ export class Game {
     netManager.onRoomStateUpdate((roomState: any) => {
       if (!this.isOnlineMode || !roomState) return;
 
-      // Sync Scores & Time from Host
+      // Sync Scores & Time from Authoritative Server / State
       this.blueScore = roomState.blueScore;
       this.redScore = roomState.redScore;
       this.options.onScore?.(this.blueScore, this.redScore);
+
+      if (roomState.timeRemaining !== undefined) {
+        this.matchTimeRemaining = roomState.timeRemaining;
+        this.isExtraTime = !!roomState.isExtraTime;
+
+        if (this.isExtraTime) {
+          this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+        } else if (this.matchConfig.duration > 0) {
+          const totalSec = Math.ceil(this.matchTimeRemaining);
+          const mins = Math.floor(totalSec / 60);
+          const secs = totalSec % 60;
+          const formatted = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+          this.options.onTimeUpdate?.(formatted, totalSec, false);
+        } else {
+          this.options.onTimeUpdate?.("∞", 0, false);
+        }
+      }
 
       // GUEST: Mirror Host's physics state exactly!
       if (!netManager.getIsHost()) {
@@ -431,28 +448,30 @@ export class Game {
       } else {
         // Record live match snapshot frame for circular replay buffer
         this.recordFrame();
-        // Update Match Time
-        if (this.isExtraTime) {
-          this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
-        } else if (this.matchConfig.duration > 0) {
-          this.matchTimeRemaining = Math.max(0, this.matchTimeRemaining - delta);
-          const totalSec = Math.ceil(this.matchTimeRemaining);
-          const mins = Math.floor(totalSec / 60);
-          const secs = totalSec % 60;
-          const formatted = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-          this.options.onTimeUpdate?.(formatted, totalSec, false);
+        // Update Match Time (Host controls timer decrement in online mode)
+        if (!this.isOnlineMode || this.netManager?.getIsHost()) {
+          if (this.isExtraTime) {
+            this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+          } else if (this.matchConfig.duration > 0) {
+            this.matchTimeRemaining = Math.max(0, this.matchTimeRemaining - delta);
+            const totalSec = Math.ceil(this.matchTimeRemaining);
+            const mins = Math.floor(totalSec / 60);
+            const secs = totalSec % 60;
+            const formatted = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+            this.options.onTimeUpdate?.(formatted, totalSec, false);
 
-          if (this.matchTimeRemaining <= 0) {
-            if (this.blueScore === this.redScore) {
-              // Tie match enters Extra Time (Golden Goal)!
-              this.isExtraTime = true;
-              this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
-            } else {
-              this.triggerGameOver();
+            if (this.matchTimeRemaining <= 0) {
+              if (this.blueScore === this.redScore) {
+                // Tie match enters Extra Time (Golden Goal)!
+                this.isExtraTime = true;
+                this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+              } else {
+                this.triggerGameOver();
+              }
             }
+          } else {
+            this.options.onTimeUpdate?.("∞", 0, false);
           }
-        } else {
-          this.options.onTimeUpdate?.("∞", 0, false);
         }
 
         this.accumulator += delta;
@@ -528,10 +547,12 @@ export class Game {
           }
         }
 
-        // Broadcast current physics state to Guest
+        // Broadcast current physics state & match timer to Guest
         this.netManager.broadcastHostState({
           blueScore: this.blueScore,
           redScore: this.redScore,
+          timeRemaining: this.matchTimeRemaining,
+          isExtraTime: this.isExtraTime,
           ball: {
             x: this.ball.position.x,
             y: this.ball.position.y,
