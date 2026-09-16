@@ -59,6 +59,18 @@ export class MenuManager {
     return this.playerName;
   }
 
+  getPlayerConfig(): Partial<MatchConfig> {
+    return {
+      playerName: this.playerName,
+      jerseyNumber: this.jerseyNumber,
+      badgeEmoji: this.badgeEmoji,
+      customColor: this.customColor,
+      borderStyle: this.borderStyle,
+      pattern: this.pattern,
+      skinIndex: this.currentSkin,
+    };
+  }
+
   showUsernameModal(): void {
     this.overlay.style.display = "flex";
     this.overlay.innerHTML = `

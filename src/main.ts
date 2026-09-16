@@ -85,10 +85,11 @@ netManager.onGameStarted((room) => {
 // Network online room handlers from menu
 menu.onOnlineRoom((action, roomCode) => {
   const activeSocket = netManager.connect();
-  const playerName = menu.getPlayerName() || "Jugador_" + Math.floor(Math.random() * 899 + 100);
+  const playerConfig = menu.getPlayerConfig();
+  const playerName = playerConfig.playerName || "Jugador_" + Math.floor(Math.random() * 899 + 100);
 
   if (action === "create") {
-    netManager.createRoom(playerName, {}, (res) => {
+    netManager.createRoom(playerName, playerConfig, (res) => {
       if (res && res.success) {
         menu.showOnlineLobby(res.room, activeSocket.id!, (team) => netManager.switchTeam(team), () => netManager.startGame());
       } else {
@@ -96,7 +97,7 @@ menu.onOnlineRoom((action, roomCode) => {
       }
     });
   } else if (action === "join" && roomCode) {
-    netManager.joinRoom(roomCode, playerName, {}, (res) => {
+    netManager.joinRoom(roomCode, playerName, playerConfig, (res) => {
       if (res && res.success) {
         menu.showOnlineLobby(res.room, activeSocket.id!, (team) => netManager.switchTeam(team), () => netManager.startGame());
       } else {

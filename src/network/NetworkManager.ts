@@ -5,6 +5,7 @@ export interface NetworkInput {
   moveY: number;
   sprint: boolean;
   kick: boolean;
+  isHoldingSpace: boolean;
   dribble: "left" | "right" | null;
   dash: boolean;
 }
@@ -82,6 +83,7 @@ export class NetworkManager {
   }
 
   onRoomStateUpdate(cb: (state: any) => void): void {
+    this.socket?.off("roomStateUpdate");
     this.socket?.on("roomStateUpdate", cb);
   }
 }

@@ -617,7 +617,7 @@ export class Renderer {
 
   private drawPlayer(player: Player, ball: Ball, isLocalPlayer = false): void {
     const ctx = this.ctx;
-    const isInteractive = player.isKicking || player.isCharging || player.kickFlash > 0;
+    const isInteractive = player.isKicking || player.isCharging || player.kickFlash > 0 || player.chargeRatio > 0.05;
 
     ctx.save();
 
@@ -639,13 +639,13 @@ export class Renderer {
       ctx.stroke();
 
       // Active movement direction indicator notch (Local player ONLY)
-      if (isLocalPlayer && player.isInputMoving) {
+      if (isLocalPlayer) {
         const angle = player.lastInputAngle;
         const arcLength = 0.48; // Width of the direction pill arc
         ctx.beginPath();
         ctx.arc(player.position.x, player.position.y, ringRadius, angle - arcLength / 2, angle + arcLength / 2);
-        ctx.strokeStyle = notchColor;
-        ctx.lineWidth = 6.8;
+        ctx.strokeStyle = player.isInputMoving ? notchColor : "rgba(255, 255, 255, 0.65)";
+        ctx.lineWidth = player.isInputMoving ? 6.8 : 4.5;
         ctx.stroke();
       }
 

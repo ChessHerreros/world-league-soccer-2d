@@ -89,10 +89,16 @@ export class Game {
     netManager.onRoomStateUpdate((roomState: any) => {
       if (!this.isOnlineMode || !roomState) return;
 
-      // Sync Scores & Time from Authoritative Server
-      this.blueScore = roomState.blueScore;
-      this.redScore = roomState.redScore;
-      this.options.onScore?.(this.blueScore, this.redScore);
+      // Sync Scores & Goal Celebration from Authoritative Server
+      if (roomState.blueScore !== this.blueScore || roomState.redScore !== this.redScore) {
+        const scorerTeam = roomState.blueScore > this.blueScore ? "blue" : "red";
+        this.blueScore = roomState.blueScore;
+        this.redScore = roomState.redScore;
+        this.options.onScore?.(this.blueScore, this.redScore);
+        this.sound.playGoal();
+        this.goalBannerTimer = 1.6;
+        this.goalScorerTeam = scorerTeam;
+      }
 
       if (roomState.timeRemaining !== undefined) {
         this.matchTimeRemaining = roomState.timeRemaining;
@@ -111,38 +117,79 @@ export class Game {
         }
       }
 
-      // Sync Ball Position & Velocity from Server
+      // Sync Ball Position, Velocity & Charge Ratio from Server
       if (roomState.ball) {
         this.ball.position.set(roomState.ball.x, roomState.ball.y);
         this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
+        this.ball.chargeRatio = roomState.ball.chargeRatio || 0;
       }
 
-      // Sync Server Players array into Local Render Entities
-      const serverPlayers = Object.values(roomState.players || {});
+      // Sync Server Players array into Local Render Entities preserving state
+      const serverPlayers: any[] = Object.values(roomState.players || {});
       const localSocketId = netManager.getSocket()?.id;
 
-      this.players.length = 0;
-      serverPlayers.forEach((sp: any) => {
-        const isLocal = sp.socketId === localSocketId;
-        const p = new Player({
-          position: new Vec2(sp.x, sp.y),
-          team: sp.team,
-        });
-        p.velocity.set(sp.vx, sp.vy);
-        p.stamina = sp.stamina;
-        p.isSprinting = sp.isSprinting;
-        p.jerseyNumber = sp.jerseyNumber;
-        p.name = sp.name;
-        p.customColor = sp.customColor;
-        p.borderStyle = sp.borderStyle || "classic";
-        p.pattern = sp.pattern || "spain";
+      const localSp = serverPlayers.find((sp: any) => sp.socketId === localSocketId);
+      const otherSps = serverPlayers.filter((sp: any) => sp.socketId !== localSocketId);
 
-        if (isLocal) {
-          this.players.unshift(p); // Put local player at index 0 for camera/control target
+      // Local player is always preserved at index 0
+      if (localSp) {
+        let p1 = this.players[0];
+        if (!p1) {
+          p1 = new Player({
+            position: new Vec2(localSp.x, localSp.y),
+            team: localSp.team,
+          });
+          this.players[0] = p1;
+        }
+        p1.position.set(localSp.x, localSp.y);
+        p1.velocity.set(localSp.vx, localSp.vy);
+        p1.stamina = localSp.stamina;
+        p1.isSprinting = localSp.isSprinting;
+        p1.isDashing = localSp.isDashing;
+        p1.jerseyNumber = localSp.jerseyNumber;
+        p1.name = localSp.name;
+        p1.customColor = localSp.customColor;
+        p1.borderStyle = localSp.borderStyle || "classic";
+        p1.pattern = localSp.pattern || "spain";
+      }
+
+      // Other remote players placed at indices 1 .. n
+      otherSps.forEach((osp: any, idx: number) => {
+        const targetIdx = idx + 1;
+        let op = this.players[targetIdx];
+        if (!op) {
+          op = new Player({
+            position: new Vec2(osp.x, osp.y),
+            team: osp.team,
+          });
+          this.players[targetIdx] = op;
+        }
+        op.position.set(osp.x, osp.y);
+        op.velocity.set(osp.vx, osp.vy);
+        op.stamina = osp.stamina;
+        op.isSprinting = osp.isSprinting;
+        op.isDashing = osp.isDashing;
+        op.isCharging = osp.isCharging;
+        op.isKicking = osp.isKicking;
+        op.chargeRatio = osp.chargeRatio || 0;
+        op.jerseyNumber = osp.jerseyNumber;
+        op.name = osp.name;
+        op.customColor = osp.customColor;
+        op.borderStyle = osp.borderStyle || "classic";
+        op.pattern = osp.pattern || "spain";
+
+        const spd = op.velocity.length();
+        if (spd > 5) {
+          op.isInputMoving = true;
+          op.lastInputAngle = Math.atan2(op.velocity.y, op.velocity.x);
         } else {
-          this.players.push(p);
+          op.isInputMoving = false;
         }
       });
+
+      if (this.players.length > otherSps.length + 1) {
+        this.players.length = otherSps.length + 1;
+      }
     });
   }
 
@@ -454,22 +501,89 @@ export class Game {
     const p1 = this.players[0];
 
     if (this.isOnlineMode && this.netManager) {
+      if (!p1) return;
+
       const p1Movement = this.input.movementP1();
       const p1WantSprint = this.input.down("shift");
+      const isSpaceDown = this.input.down(" ");
       const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
       const qPressed = this.input.consumePressed("q");
       const ePressed = this.input.consumePressed("e");
       const cPressed = this.input.consumePressed("c");
 
+      // 1. Client-Side Direction Indicator (WASD / Arrows)
+      const isMoving = Math.hypot(p1Movement.x, p1Movement.y) > 0.1;
+      p1.isInputMoving = isMoving;
+      if (isMoving) {
+        p1.lastInputAngle = Math.atan2(p1Movement.y, p1Movement.x);
+      }
+
+      // 2. Client-Side Charging & Aiming Dots Indicator
+      const dx = this.ball.position.x - p1.position.x;
+      const dy = this.ball.position.y - p1.position.y;
+      const distToBall = Math.hypot(dx, dy);
+      const nearBall = distToBall <= p1.kickRadius;
+
+      p1.isKicking = isSpaceDown || p1.kickFlash > 0;
+      p1.updateCharge(dt, nearBall, isSpaceDown);
+
+      // Local power glow responsiveness (takes highest between local charge and server state)
+      this.ball.chargeRatio = Math.max(this.ball.chargeRatio, p1.chargeRatio);
+
+      // 3. Audio & Visual Effects Immediate Client-Side Responsiveness
+      if (spacePressed) {
+        p1.kick();
+        if (nearBall) {
+          this.sound.playKick();
+        }
+      }
+
+      if (qPressed || ePressed) {
+        if (p1.canDribble()) {
+          p1.dribble();
+          this.sound.playDribble();
+        }
+      }
+
+      if (cPressed && p1.canDash()) {
+        p1.dash();
+        this.sound.playDash();
+        this.renderer.addShockwave(p1.position.x, p1.position.y, 0.45);
+      }
+
+      // 4. Update timers and animations
+      p1.animTime += dt;
+      p1.kickFlash = Math.max(0, p1.kickFlash - dt);
+      p1.dashFlash = Math.max(0, p1.dashFlash - dt);
+
+      for (let i = 1; i < this.players.length; i++) {
+        const op = this.players[i];
+        op.animTime += dt;
+        op.kickFlash = Math.max(0, op.kickFlash - dt);
+        op.dashFlash = Math.max(0, op.dashFlash - dt);
+      }
+
+      // 5. Ball 3D Rolling Offsets & Rotation Physics Animation
+      const bSpeed = this.ball.velocity.length();
+      if (bSpeed > 2) {
+        this.ball.rollOffsetX += this.ball.velocity.x * dt;
+        this.ball.rollOffsetY += this.ball.velocity.y * dt;
+        this.ball.rotation += (bSpeed / (this.ball.radius * 1.5)) * dt;
+        this.ball.lastMoveAngle = Math.atan2(this.ball.velocity.y, this.ball.velocity.x);
+      }
+
+      // 6. Send Inputs Authoritatively to Server
       this.netManager.sendInput({
         moveX: p1Movement.x,
         moveY: p1Movement.y,
         sprint: p1WantSprint,
         kick: spacePressed,
+        isHoldingSpace: isSpaceDown,
         dribble: qPressed ? "right" : ePressed ? "left" : null,
         dash: cPressed,
       });
-      return; // Physics and movement are 100% authoritative on central server!
+
+      return; // Authoritative state is computed and broadcast by central server!
     } else if (this.isDemoMode) {
       // In background demo match, P1 is driven by Bot AI as well!
       const p1Action = this.botBrain.update(dt, p1, this.players, this.ball, this.arena, 0);
