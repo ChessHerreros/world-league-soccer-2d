@@ -61,6 +61,8 @@ export class Game {
   private goalBannerTimer = 0;
   private goalScorerTeam: "blue" | "red" | null = null;
   private recentKickTimestamps: number[] = [];
+  private lastQPressTime = 0;
+  private lastEPressTime = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -85,6 +87,14 @@ export class Game {
   setOnlineNetworkManager(netManager: any): void {
     this.netManager = netManager;
     this.isOnlineMode = true;
+
+    netManager.onMatchEnded((data: any) => {
+      if (data) {
+        this.blueScore = data.blueScore;
+        this.redScore = data.redScore;
+      }
+      this.triggerGameOver();
+    });
 
     netManager.onRoomStateUpdate((roomState: any) => {
       if (!this.isOnlineMode || !roomState) return;
@@ -114,6 +124,16 @@ export class Game {
           this.options.onTimeUpdate?.(formatted, totalSec, false);
         } else {
           this.options.onTimeUpdate?.("∞", 0, false);
+        }
+      }
+
+      // Check Game Over from Server
+      if (roomState.status === "ended" || (roomState.timeRemaining <= 0 && !this.isExtraTime && this.matchConfig.duration > 0)) {
+        if (roomState.blueScore === roomState.redScore) {
+          this.isExtraTime = true;
+          this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+        } else {
+          this.triggerGameOver();
         }
       }
 
@@ -511,6 +531,15 @@ export class Game {
               }
             }
           }
+        } else {
+          if (this.matchTimeRemaining <= 0 && this.matchConfig.duration > 0 && !this.isExtraTime) {
+            if (this.blueScore === this.redScore) {
+              this.isExtraTime = true;
+              this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+            } else {
+              this.triggerGameOver();
+            }
+          }
         }
 
         this.accumulator += delta;
@@ -549,6 +578,8 @@ export class Game {
       const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
       const qPressed = this.input.consumePressed("q");
       const ePressed = this.input.consumePressed("e");
+      const qDown = this.input.down("q");
+      const eDown = this.input.down("e");
       const cPressed = this.input.consumePressed("c");
 
       // 1. Client-Side Direction Indicator & Prediction (0ms input latency!)
@@ -571,6 +602,7 @@ export class Game {
       const dy = this.ball.position.y - p1.position.y;
       const distToBall = Math.hypot(dx, dy);
       const nearBall = distToBall <= p1.kickRadius;
+      const inDribbleRange = distToBall <= p1.kickRadius + 26;
 
       p1.isKicking = isSpaceDown || p1.kickFlash > 0;
       p1.updateCharge(dt, nearBall, isSpaceDown);
@@ -586,17 +618,31 @@ export class Game {
         }
       }
 
-      if (qPressed || ePressed) {
-        if (p1.canDribble()) {
-          p1.dribble();
-          this.sound.playDribble();
-        }
+      if (qPressed) this.lastQPressTime = performance.now();
+      if (ePressed) this.lastEPressTime = performance.now();
+
+      const qBuffered = (performance.now() - this.lastQPressTime) < 180;
+      const eBuffered = (performance.now() - this.lastEPressTime) < 180;
+
+      // Skill Dribble with Q / E (supports instant tap, input buffering, or holding key until in range)
+      const wantDribbleQ = ((qBuffered || qDown) && inDribbleRange) && p1.canDribble();
+      const wantDribbleE = ((eBuffered || eDown) && inDribbleRange) && p1.canDribble();
+
+      let dribbleAction: "left" | "right" | null = null;
+      if (wantDribbleQ) {
+        this.lastQPressTime = 0;
+        dribbleAction = "left";
+        this.dribble(p1, "left");
+      } else if (wantDribbleE) {
+        this.lastEPressTime = 0;
+        dribbleAction = "right";
+        this.dribble(p1, "right");
       }
 
+      // Dash skill move with C (applies instant dash impulse in movement direction)
       if (cPressed && p1.canDash()) {
-        p1.dash();
-        this.sound.playDash();
-        this.renderer.addShockwave(p1.position.x, p1.position.y, 0.45);
+        const p1Move = this.input.movementP1();
+        this.performDash(p1, p1Move.x, p1Move.y);
       }
 
       // 4. Update timers, animations, and dead-reckoning extrapolation for remote players
@@ -633,7 +679,7 @@ export class Game {
         sprint: p1WantSprint,
         kick: spacePressed,
         isHoldingSpace: isSpaceDown,
-        dribble: qPressed ? "right" : ePressed ? "left" : null,
+        dribble: dribbleAction,
         dash: cPressed,
       });
 
@@ -712,7 +758,7 @@ export class Game {
     const dy = this.ball.position.y - p1.position.y;
     const distToBall = Math.hypot(dx, dy);
     const nearBall = distToBall <= p1.kickRadius;
-    const inDribbleRange = distToBall <= p1.kickRadius + 22;
+    const inDribbleRange = distToBall <= p1.kickRadius + 26;
 
     const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
     const isSpaceDown = this.input.down(" ");
@@ -722,13 +768,21 @@ export class Game {
     const qDown = this.input.down("q");
     const eDown = this.input.down("e");
 
-    const shouldDribbleQ = (qPressed || (qDown && inDribbleRange)) && p1.canDribble();
-    const shouldDribbleE = (ePressed || (eDown && inDribbleRange)) && p1.canDribble();
+    if (qPressed) this.lastQPressTime = performance.now();
+    if (ePressed) this.lastEPressTime = performance.now();
+
+    const qBuffered = (performance.now() - this.lastQPressTime) < 180;
+    const eBuffered = (performance.now() - this.lastEPressTime) < 180;
+
+    const shouldDribbleQ = ((qBuffered || qDown) && inDribbleRange) && p1.canDribble();
+    const shouldDribbleE = ((eBuffered || eDown) && inDribbleRange) && p1.canDribble();
 
     if (shouldDribbleQ) {
-      this.dribble(p1, "right");
-    } else if (shouldDribbleE) {
+      this.lastQPressTime = 0;
       this.dribble(p1, "left");
+    } else if (shouldDribbleE) {
+      this.lastEPressTime = 0;
+      this.dribble(p1, "right");
     }
 
     if (this.input.consumePressed("c") && p1.canDash()) {
@@ -766,7 +820,7 @@ export class Game {
     const dy = this.ball.position.y - player.position.y;
     const distance = Math.hypot(dx, dy);
 
-    if (distance > player.kickRadius + 22) return;
+    if (distance > player.kickRadius + 26) return;
 
     // Determine team sizes based on selected mode
     let teamCount = 1;
@@ -786,10 +840,12 @@ export class Game {
       fy /= distance;
     }
 
-    // Blend lateral perpendicular vector (-fy, fx) with forward vector for forward-left / forward-right skill move
+    // Perpendicular vector calculation in screen coordinates (+Y is down):
+    // LEFT turn (-90 deg) is (fy, -fx)
+    // RIGHT turn (+90 deg) is (-fy, fx)
     const forwardBias = 0.45;
-    let dragX = side === "left" ? (-fy + fx * forwardBias) : (fy + fx * forwardBias);
-    let dragY = side === "left" ? (fx + fy * forwardBias) : (-fx + fy * forwardBias);
+    let dragX = side === "left" ? (fy + fx * forwardBias) : (-fy + fx * forwardBias);
+    let dragY = side === "left" ? (-fx + fy * forwardBias) : (fx + fy * forwardBias);
 
     const dragLen = Math.hypot(dragX, dragY);
     if (dragLen > 0.0001) {

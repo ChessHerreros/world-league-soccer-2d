@@ -86,4 +86,9 @@ export class NetworkManager {
     this.socket?.off("roomStateUpdate");
     this.socket?.on("roomStateUpdate", cb);
   }
+
+  onMatchEnded(cb: (data: { winner: "blue" | "red" | "draw"; blueScore: number; redScore: number }) => void): void {
+    this.socket?.off("matchEnded");
+    this.socket?.on("matchEnded", cb);
+  }
 }

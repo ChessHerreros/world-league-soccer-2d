@@ -318,7 +318,7 @@ setInterval(() => {
     // C. ACTIVE PLAYING PHASE
     // 1. Update Match Clock on Server (ONLY WHEN PLAYING!)
     if (room.isExtraTime) {
-      // Golden Goal
+      // Golden Goal (first goal wins)
     } else if (room.duration > 0) {
       room.timeRemaining = Math.max(0, room.timeRemaining - TICK);
       if (room.timeRemaining <= 0) {
@@ -326,6 +326,14 @@ setInterval(() => {
           room.isExtraTime = true;
         } else {
           room.status = "ended";
+          const winner = room.blueScore > room.redScore ? "blue" : "red";
+          io.to(code).emit("matchEnded", {
+            winner,
+            blueScore: room.blueScore,
+            redScore: room.redScore,
+          });
+          io.to(code).emit("roomStateUpdate", room);
+          continue;
         }
       }
     }
@@ -418,17 +426,37 @@ setInterval(() => {
     if (room.ball.x < -ballRadius && ballInGoalY) {
       room.redScore++;
       room.lastScorerTeam = "red";
-      room.status = "goal";
-      room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
-      resetPositions(room);
+      if (room.isExtraTime || room.redScore >= 5) {
+        room.status = "ended";
+        const winner = room.blueScore > room.redScore ? "blue" : "red";
+        io.to(code).emit("matchEnded", {
+          winner,
+          blueScore: room.blueScore,
+          redScore: room.redScore,
+        });
+      } else {
+        room.status = "goal";
+        room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
+        resetPositions(room);
+      }
       io.to(code).emit("roomStateUpdate", room);
       continue;
     } else if (room.ball.x > width + ballRadius && ballInGoalY) {
       room.blueScore++;
       room.lastScorerTeam = "blue";
-      room.status = "goal";
-      room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
-      resetPositions(room);
+      if (room.isExtraTime || room.blueScore >= 5) {
+        room.status = "ended";
+        const winner = room.blueScore > room.redScore ? "blue" : "red";
+        io.to(code).emit("matchEnded", {
+          winner,
+          blueScore: room.blueScore,
+          redScore: room.redScore,
+        });
+      } else {
+        room.status = "goal";
+        room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
+        resetPositions(room);
+      }
       io.to(code).emit("roomStateUpdate", room);
       continue;
     }
@@ -478,52 +506,60 @@ setInterval(() => {
       }
 
       // Handle Skill Dribble (Q / E)
-      if (inp.dribble && p.dribbleCooldown <= 0 && distToBall <= kickRadius + 22) {
-        p.dribbleCooldown = 0.55;
-        let fx = dxToBall;
-        let fy = dyToBall;
-        if (distToBall < 0.0001) {
-          fx = p.team === "blue" ? 1 : -1;
-          fy = 0;
-        } else {
-          fx /= distToBall;
-          fy /= distToBall;
+      if (inp.dribble) {
+        if (p.dribbleCooldown <= 0 && distToBall <= kickRadius + 26) {
+          p.dribbleCooldown = 0.55;
+          let fx = dxToBall;
+          let fy = dyToBall;
+          if (distToBall < 0.0001) {
+            fx = p.team === "blue" ? 1 : -1;
+            fy = 0;
+          } else {
+            fx /= distToBall;
+            fy /= distToBall;
+          }
+
+          // Perpendicular vector calculation in screen coordinates (+Y is down):
+          // LEFT turn (-90 deg) is (fy, -fx)
+          // RIGHT turn (+90 deg) is (-fy, fx)
+          const forwardBias = 0.45;
+          let dragX = inp.dribble === "left" ? (fy + fx * forwardBias) : (-fy + fx * forwardBias);
+          let dragY = inp.dribble === "left" ? (-fx + fy * forwardBias) : (fx + fy * forwardBias);
+          const dragLen = Math.hypot(dragX, dragY) || 1;
+          dragX /= dragLen;
+          dragY /= dragLen;
+
+          const dragPower = 160;
+          room.ball.vx += dragX * dragPower;
+          room.ball.vy += dragY * dragPower;
+          p.vx += dragX * 45;
+          p.vy += dragY * 45;
         }
-
-        const forwardBias = 0.45;
-        let dragX = inp.dribble === "left" ? (-fy + fx * forwardBias) : (fy + fx * forwardBias);
-        let dragY = inp.dribble === "left" ? (fx + fy * forwardBias) : (-fx + fy * forwardBias);
-        const dragLen = Math.hypot(dragX, dragY) || 1;
-        dragX /= dragLen;
-        dragY /= dragLen;
-
-        room.ball.vx += dragX * 160;
-        room.ball.vy += dragY * 160;
-        p.vx += dragX * 45;
-        p.vy += dragY * 45;
         inp.dribble = null;
       }
 
       // Handle Dash Skill Move (C)
-      if (inp.dash && p.stamina >= 50 && !p.isDashing) {
-        p.stamina = Math.max(0, p.stamina - 50);
-        p.isDashing = true;
-        p.dashTimer = 0.11;
+      if (inp.dash) {
+        if (p.stamina >= 50 && !p.isDashing) {
+          p.stamina = Math.max(0, p.stamina - 50);
+          p.isDashing = true;
+          p.dashTimer = 0.11;
 
-        let dx = inp.moveX;
-        let dy = inp.moveY;
-        const len = Math.hypot(dx, dy);
-        if (len < 0.0001) {
-          dx = p.team === "blue" ? 1 : -1;
-          dy = 0;
-        } else {
-          dx /= len;
-          dy /= len;
+          let dx = inp.moveX;
+          let dy = inp.moveY;
+          const len = Math.hypot(dx, dy);
+          if (len < 0.0001) {
+            dx = p.team === "blue" ? 1 : -1;
+            dy = 0;
+          } else {
+            dx /= len;
+            dy /= len;
+          }
+
+          const dashImpulse = 1050;
+          p.vx = dx * dashImpulse;
+          p.vy = dy * dashImpulse;
         }
-
-        const dashImpulse = 1050;
-        p.vx = dx * dashImpulse;
-        p.vy = dy * dashImpulse;
         inp.dash = false;
       }
 
@@ -833,7 +869,18 @@ io.on("connection", (socket: Socket) => {
     const code = (data.roomCode || "").toUpperCase().trim();
     const room = rooms[code];
     if (room && room.players[socket.id] && data.input) {
-      room.players[socket.id].input = data.input;
+      const prev = room.players[socket.id].input;
+      // One-shot impulses (dribble, kick, dash) must NOT be clobbered by empty frames before server tick consumes them!
+      const preservedDribble = data.input.dribble || prev?.dribble || null;
+      const preservedKick = data.input.kick || prev?.kick || false;
+      const preservedDash = data.input.dash || prev?.dash || false;
+
+      room.players[socket.id].input = {
+        ...data.input,
+        dribble: preservedDribble,
+        kick: preservedKick,
+        dash: preservedDash,
+      };
     }
   });
 

@@ -880,17 +880,21 @@ export class MenuManager {
 
     document.querySelector("#btn-rematch")?.addEventListener("click", () => {
       this.hideOverlay();
-      this.onStartMatchCallback?.({
-        mode: this.selectedMode,
-        duration: this.duration,
-        goalLimit: this.goalLimit,
-        skinIndex: this.currentSkin,
-        jerseyNumber: this.jerseyNumber,
-        badgeEmoji: this.badgeEmoji,
-        customColor: this.customColor,
-        borderStyle: this.borderStyle,
-        pattern: this.pattern,
-      });
+      if (this.selectedMode === "ONLINE") {
+        this.showOnlineMenu();
+      } else {
+        this.onStartMatchCallback?.({
+          mode: this.selectedMode,
+          duration: this.duration,
+          goalLimit: this.goalLimit,
+          skinIndex: this.currentSkin,
+          jerseyNumber: this.jerseyNumber,
+          badgeEmoji: this.badgeEmoji,
+          customColor: this.customColor,
+          borderStyle: this.borderStyle,
+          pattern: this.pattern,
+        });
+      }
     });
 
     document.querySelector("#btn-main-menu")?.addEventListener("click", () => {
