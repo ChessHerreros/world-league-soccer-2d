@@ -88,8 +88,12 @@ setInterval(() => {
     }
 
     // Physics Update on Server
-    const width = 1300;
-    const height = 750;
+    const width = 1000;
+    const height = 600;
+    const goalWidth = 200;
+    const goalTop = (height - goalWidth) / 2;
+    const goalBottom = goalTop + goalWidth;
+    const goalDepth = 65;
     const arenaRadius = 22;
     const ballRadius = 13;
 
@@ -99,25 +103,92 @@ setInterval(() => {
     room.ball.vx *= Math.pow(0.98, TICK * 60);
     room.ball.vy *= Math.pow(0.98, TICK * 60);
 
-    // Ball Arena Collisions
-    if (room.ball.y - ballRadius < 0) { room.ball.y = ballRadius; room.ball.vy *= -0.7; }
-    if (room.ball.y + ballRadius > height) { room.ball.y = height - ballRadius; room.ball.vy *= -0.7; }
-    if (room.ball.x - ballRadius < 0 && (room.ball.y < 255 || room.ball.y > 495)) { room.ball.x = ballRadius; room.ball.vx *= -0.7; }
-    if (room.ball.x + ballRadius > width && (room.ball.y < 255 || room.ball.y > 495)) { room.ball.x = width - ballRadius; room.ball.vx *= -0.7; }
+    // Ball Arena & Goal Net Collisions
+    if (room.ball.y - ballRadius < 0) { room.ball.y = ballRadius; room.ball.vy = Math.abs(room.ball.vy) * 0.7; }
+    if (room.ball.y + ballRadius > height) { room.ball.y = height - ballRadius; room.ball.vy = -Math.abs(room.ball.vy) * 0.7; }
+
+    const inGoalY = room.ball.y >= goalTop && room.ball.y <= goalBottom;
+
+    if (!inGoalY && room.ball.x - ballRadius < 0) {
+      room.ball.x = ballRadius;
+      room.ball.vx = Math.abs(room.ball.vx) * 0.7;
+    } else if (inGoalY && room.ball.x - ballRadius < -goalDepth) {
+      room.ball.x = -goalDepth + ballRadius;
+      room.ball.vx = Math.abs(room.ball.vx) * 0.35;
+    }
+
+    if (!inGoalY && room.ball.x + ballRadius > width) {
+      room.ball.x = width - ballRadius;
+      room.ball.vx = -Math.abs(room.ball.vx) * 0.7;
+    } else if (inGoalY && room.ball.x + ballRadius > width + goalDepth) {
+      room.ball.x = width + goalDepth - ballRadius;
+      room.ball.vx = -Math.abs(room.ball.vx) * 0.35;
+    }
+
+    // Top/Bottom net walls for deep goals
+    if (room.ball.x < 0 || room.ball.x > width) {
+      if (room.ball.y - ballRadius < goalTop) {
+        room.ball.y = goalTop + ballRadius;
+        room.ball.vy = Math.abs(room.ball.vy) * 0.4;
+      }
+      if (room.ball.y + ballRadius > goalBottom) {
+        room.ball.y = goalBottom - ballRadius;
+        room.ball.vy = -Math.abs(room.ball.vy) * 0.4;
+      }
+    }
 
     // Check Goals
-    if (room.ball.x < -ballRadius && room.ball.y >= 255 && room.ball.y <= 495) {
+    if (room.ball.x < -ballRadius && inGoalY) {
       room.redScore++;
       resetPositions(room);
-    } else if (room.ball.x > width + ballRadius && room.ball.y >= 255 && room.ball.y <= 495) {
+    } else if (room.ball.x > width + ballRadius && inGoalY) {
       room.blueScore++;
       resetPositions(room);
     }
 
-    // Update Players
+    // Update Players & Skill Moves
     for (const pid in room.players) {
       const p = room.players[pid];
       const inp = p.input;
+
+      // Handle Skill Dribble
+      if (inp.dribble && distToBall(p, room.ball) <= arenaRadius + 30) {
+        const dx = room.ball.x - p.x;
+        const dy = room.ball.y - p.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        let fx = dx / distance;
+        let fy = dy / distance;
+
+        const forwardBias = 0.45;
+        let dragX = inp.dribble === "left" ? (-fy + fx * forwardBias) : (fy + fx * forwardBias);
+        let dragY = inp.dribble === "left" ? (fx + fy * forwardBias) : (-fx + fy * forwardBias);
+        const dragLen = Math.hypot(dragX, dragY) || 1;
+        dragX /= dragLen; dragY /= dragLen;
+
+        room.ball.vx += dragX * 160;
+        room.ball.vy += dragY * 160;
+        p.vx += dragX * 45;
+        p.vy += dragY * 45;
+        inp.dribble = null; // consume
+      }
+
+      // Handle Dash Skill Move
+      if (inp.dash && p.stamina >= 50) {
+        p.stamina = Math.max(0, p.stamina - 50);
+        let dx = inp.moveX;
+        let dy = inp.moveY;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.0001) {
+          dx = p.team === "blue" ? 1 : -1;
+          dy = 0;
+        } else {
+          dx /= len; dy /= len;
+        }
+        const dashImpulse = 1050;
+        p.vx = dx * dashImpulse;
+        p.vy = dy * dashImpulse;
+        inp.dash = false; // consume
+      }
 
       const accel = inp.sprint && p.stamina > 2 ? 2400 : 1800;
       const maxSpd = inp.sprint && p.stamina > 2 ? 570 : 420;
@@ -175,14 +246,44 @@ setInterval(() => {
       }
     }
 
+    // Inter-Player Collisions on Server
+    const playerList = Object.values(room.players);
+    for (let i = 0; i < playerList.length; i++) {
+      for (let j = i + 1; j < playerList.length; j++) {
+        const pA = playerList[i];
+        const pB = playerList[j];
+        const dx = pB.x - pA.x;
+        const dy = pB.y - pA.y;
+        const minDist = arenaRadius * 2;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < minDist * minDist) {
+          const dist = Math.sqrt(distSq) || 0.0001;
+          const overlap = minDist - dist;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          pA.x -= nx * overlap * 0.5;
+          pA.y -= ny * overlap * 0.5;
+          pB.x += nx * overlap * 0.5;
+          pB.y += ny * overlap * 0.5;
+        }
+      }
+    }
+
     // Broadcast room state to all clients in room
     io.to(roomId).emit("roomStateUpdate", room);
   }
 }, 1000 / 60);
 
+function distToBall(p: RoomPlayer, ball: { x: number; y: number }): number {
+  return Math.hypot(ball.x - p.x, ball.y - p.y);
+}
+
 function resetPositions(room: RoomState): void {
-  room.ball.x = 650;
-  room.ball.y = 375;
+  const width = 1000;
+  const height = 600;
+
+  room.ball.x = width / 2;
+  room.ball.y = height / 2;
   room.ball.vx = 0;
   room.ball.vy = 0;
 
@@ -190,15 +291,18 @@ function resetPositions(room: RoomState): void {
   const blueList = playerList.filter(p => p.team === "blue");
   const redList = playerList.filter(p => p.team === "red");
 
+  const blueStartX = Math.floor(width * 0.22);
+  const redStartX = Math.floor(width * 0.78);
+
   blueList.forEach((p, i) => {
-    p.x = 280 - i * 60;
-    p.y = 375 + (i - (blueList.length - 1) / 2) * 90;
+    p.x = blueStartX - i * 60;
+    p.y = height / 2 + (i - (blueList.length - 1) / 2) * 90;
     p.vx = 0; p.vy = 0;
   });
 
   redList.forEach((p, i) => {
-    p.x = 1020 + i * 60;
-    p.y = 375 + (i - (redList.length - 1) / 2) * 90;
+    p.x = redStartX + i * 60;
+    p.y = height / 2 + (i - (redList.length - 1) / 2) * 90;
     p.vx = 0; p.vy = 0;
   });
 }
