@@ -206,5 +206,11 @@ export class NetworkManager {
   onRoomStateUpdate(cb: (state: any) => void): void {
     this.onRoomStateUpdateCb = cb;
     this.socket?.on("hostStateUpdate", cb);
+    this.socket?.on("roomStateUpdate", (serverRoomState: any) => {
+      // Always forward server-authoritative time & score updates
+      if (serverRoomState) {
+        cb(serverRoomState);
+      }
+    });
   }
 }

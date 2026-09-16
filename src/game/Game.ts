@@ -448,8 +448,8 @@ export class Game {
       } else {
         // Record live match snapshot frame for circular replay buffer
         this.recordFrame();
-        // Update Match Time (Host controls timer decrement in online mode)
-        if (!this.isOnlineMode || this.netManager?.getIsHost()) {
+        // Update Match Time (In online mode, server controls match timer 100%)
+        if (!this.isOnlineMode) {
           if (this.isExtraTime) {
             this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
           } else if (this.matchConfig.duration > 0) {
