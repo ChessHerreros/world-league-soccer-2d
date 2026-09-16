@@ -129,60 +129,84 @@ export class Game {
       // Sync Ball Position, Velocity & Charge Ratio from Server (only when NOT viewing goal replay!)
       if (!this.isReplayingGoal) {
         if (roomState.ball) {
-          this.ball.position.set(roomState.ball.x, roomState.ball.y);
+          const bDiffX = roomState.ball.x - this.ball.position.x;
+          const bDiffY = roomState.ball.y - this.ball.position.y;
+          const bErr = Math.hypot(bDiffX, bDiffY);
+          if (bErr > 120 || roomState.status !== "playing") {
+            this.ball.position.set(roomState.ball.x, roomState.ball.y);
+          } else {
+            this.ball.position.x += bDiffX * 0.55;
+            this.ball.position.y += bDiffY * 0.55;
+          }
           this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
           this.ball.chargeRatio = roomState.ball.chargeRatio || 0;
         }
 
-      // Sync Server Players array into Local Render Entities preserving state
-      const serverPlayers: any[] = Object.values(roomState.players || {});
-      const localSocketId = netManager.getSocket()?.id;
+        // Sync Server Players array into Local Render Entities preserving state
+        const serverPlayers: any[] = Object.values(roomState.players || {});
+        const localSocketId = netManager.getSocket()?.id;
 
-      const localSp = serverPlayers.find((sp: any) => sp.socketId === localSocketId);
-      const otherSps = serverPlayers.filter((sp: any) => sp.socketId !== localSocketId);
+        const localSp = serverPlayers.find((sp: any) => sp.socketId === localSocketId);
+        const otherSps = serverPlayers.filter((sp: any) => sp.socketId !== localSocketId);
 
-      // Local player is always preserved at index 0
-      if (localSp) {
-        let p1 = this.players[0];
-        if (!p1) {
-          p1 = new Player({
-            position: new Vec2(localSp.x, localSp.y),
-            team: localSp.team,
-          });
-          this.players[0] = p1;
+        // Local player is always preserved at index 0 with smooth reconciliation
+        if (localSp) {
+          let p1 = this.players[0];
+          if (!p1) {
+            p1 = new Player({
+              position: new Vec2(localSp.x, localSp.y),
+              team: localSp.team,
+            });
+            this.players[0] = p1;
+          }
+          const diffX = localSp.x - p1.position.x;
+          const diffY = localSp.y - p1.position.y;
+          const errDist = Math.hypot(diffX, diffY);
+          if (errDist > 80 || roomState.status !== "playing") {
+            p1.position.set(localSp.x, localSp.y);
+          } else {
+            p1.position.x += diffX * 0.35;
+            p1.position.y += diffY * 0.35;
+          }
+          p1.velocity.set(localSp.vx, localSp.vy);
+          p1.stamina = localSp.stamina;
+          p1.isSprinting = localSp.isSprinting;
+          p1.isDashing = localSp.isDashing;
+          p1.jerseyNumber = localSp.jerseyNumber;
+          p1.name = localSp.name;
+          p1.customColor = localSp.customColor;
+          p1.borderStyle = localSp.borderStyle || "classic";
+          p1.pattern = localSp.pattern || "spain";
         }
-        p1.position.set(localSp.x, localSp.y);
-        p1.velocity.set(localSp.vx, localSp.vy);
-        p1.stamina = localSp.stamina;
-        p1.isSprinting = localSp.isSprinting;
-        p1.isDashing = localSp.isDashing;
-        p1.jerseyNumber = localSp.jerseyNumber;
-        p1.name = localSp.name;
-        p1.customColor = localSp.customColor;
-        p1.borderStyle = localSp.borderStyle || "classic";
-        p1.pattern = localSp.pattern || "spain";
-      }
 
-      // Other remote players placed at indices 1 .. n
-      otherSps.forEach((osp: any, idx: number) => {
-        const targetIdx = idx + 1;
-        let op = this.players[targetIdx];
-        if (!op) {
-          op = new Player({
-            position: new Vec2(osp.x, osp.y),
-            team: osp.team,
-          });
-          this.players[targetIdx] = op;
-        }
-        op.position.set(osp.x, osp.y);
-        op.velocity.set(osp.vx, osp.vy);
-        op.stamina = osp.stamina;
-        op.isSprinting = osp.isSprinting;
-        op.isDashing = osp.isDashing;
-        op.isCharging = osp.isCharging;
-        op.isKicking = osp.isKicking;
-        op.chargeRatio = osp.chargeRatio || 0;
-        op.jerseyNumber = osp.jerseyNumber;
+        // Other remote players placed at indices 1 .. n with smooth lerp
+        otherSps.forEach((osp: any, idx: number) => {
+          const targetIdx = idx + 1;
+          let op = this.players[targetIdx];
+          if (!op) {
+            op = new Player({
+              position: new Vec2(osp.x, osp.y),
+              team: osp.team,
+            });
+            this.players[targetIdx] = op;
+          }
+          const diffX = osp.x - op.position.x;
+          const diffY = osp.y - op.position.y;
+          const errDist = Math.hypot(diffX, diffY);
+          if (errDist > 100 || roomState.status !== "playing") {
+            op.position.set(osp.x, osp.y);
+          } else {
+            op.position.x += diffX * 0.45;
+            op.position.y += diffY * 0.45;
+          }
+          op.velocity.set(osp.vx, osp.vy);
+          op.stamina = osp.stamina;
+          op.isSprinting = osp.isSprinting;
+          op.isDashing = osp.isDashing;
+          op.isCharging = osp.isCharging;
+          op.isKicking = osp.isKicking;
+          op.chargeRatio = osp.chargeRatio || 0;
+          op.jerseyNumber = osp.jerseyNumber;
         op.name = osp.name;
         op.customColor = osp.customColor;
         op.borderStyle = osp.borderStyle || "classic";
@@ -527,11 +551,19 @@ export class Game {
       const ePressed = this.input.consumePressed("e");
       const cPressed = this.input.consumePressed("c");
 
-      // 1. Client-Side Direction Indicator (WASD / Arrows)
+      // 1. Client-Side Direction Indicator & Prediction (0ms input latency!)
       const isMoving = Math.hypot(p1Movement.x, p1Movement.y) > 0.1;
       p1.isInputMoving = isMoving;
       if (isMoving) {
         p1.lastInputAngle = Math.atan2(p1Movement.y, p1Movement.x);
+      }
+
+      // Local player physics prediction so WASD moves immediately with ZERO delay
+      if (!p1.isDashing) {
+        p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint);
+        Physics.playerArena(p1, this.arena);
+      } else {
+        p1.update(dt, 0, 0, false);
       }
 
       // 2. Client-Side Charging & Aiming Dots Indicator
@@ -567,19 +599,25 @@ export class Game {
         this.renderer.addShockwave(p1.position.x, p1.position.y, 0.45);
       }
 
-      // 4. Update timers and animations
+      // 4. Update timers, animations, and dead-reckoning extrapolation for remote players
       p1.animTime += dt;
       p1.kickFlash = Math.max(0, p1.kickFlash - dt);
       p1.dashFlash = Math.max(0, p1.dashFlash - dt);
 
       for (let i = 1; i < this.players.length; i++) {
         const op = this.players[i];
+        op.position.x += op.velocity.x * dt;
+        op.position.y += op.velocity.y * dt;
         op.animTime += dt;
         op.kickFlash = Math.max(0, op.kickFlash - dt);
         op.dashFlash = Math.max(0, op.dashFlash - dt);
       }
 
-      // 5. Ball 3D Rolling Offsets & Rotation Physics Animation
+      // 5. Ball Extrapolation & 3D Rolling Offsets / Rotation Physics Animation
+      this.ball.position.x += this.ball.velocity.x * dt;
+      this.ball.position.y += this.ball.velocity.y * dt;
+      Physics.ballArena(this.ball, this.arena);
+
       const bSpeed = this.ball.velocity.length();
       if (bSpeed > 2) {
         this.ball.rollOffsetX += this.ball.velocity.x * dt;
