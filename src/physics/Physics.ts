@@ -241,6 +241,9 @@ export class Physics {
     // 3. Boundary walls collision
     const r = player.radius;
 
+    const inGoalY = arena.isInsideGoal(player.position.y);
+    const gd = arena.goalDepth;
+
     if (player.position.y - r < 0) {
       player.position.y = r;
       player.velocity.y = Math.max(0, player.velocity.y);
@@ -251,14 +254,34 @@ export class Physics {
       player.velocity.y = Math.min(0, player.velocity.y);
     }
 
-    if (player.position.x - r < 0) {
+    // Left wall / Left goal net
+    if (!inGoalY && player.position.x - r < 0) {
       player.position.x = r;
+      player.velocity.x = Math.max(0, player.velocity.x);
+    } else if (inGoalY && player.position.x - r < -gd + 10) {
+      player.position.x = -gd + 10 + r;
       player.velocity.x = Math.max(0, player.velocity.x);
     }
 
-    if (player.position.x + r > arena.width) {
+    // Right wall / Right goal net
+    if (!inGoalY && player.position.x + r > arena.width) {
       player.position.x = arena.width - r;
       player.velocity.x = Math.min(0, player.velocity.x);
+    } else if (inGoalY && player.position.x + r > arena.width + gd - 10) {
+      player.position.x = arena.width + gd - 10 - r;
+      player.velocity.x = Math.min(0, player.velocity.x);
+    }
+
+    // Top/Bottom net walls for deep goals
+    if (player.position.x < 0 || player.position.x > arena.width) {
+      if (player.position.y - r < arena.goalTop) {
+        player.position.y = arena.goalTop + r;
+        player.velocity.y = Math.max(0, player.velocity.y);
+      }
+      if (player.position.y + r > arena.goalBottom) {
+        player.position.y = arena.goalBottom - r;
+        player.velocity.y = Math.min(0, player.velocity.y);
+      }
     }
   }
 }

@@ -215,8 +215,17 @@ setInterval(() => {
       p.x += p.vx * TICK;
       p.y += p.vy * TICK;
 
-      // Arena bounds for players
-      p.x = Math.max(arenaRadius, Math.min(width - arenaRadius, p.x));
+      // Arena bounds for players (allowing entry inside goal nets)
+      const pInGoalY = p.y >= goalTop && p.y <= goalBottom;
+
+      if (!pInGoalY) {
+        p.x = Math.max(arenaRadius, Math.min(width - arenaRadius, p.x));
+      } else {
+        p.x = Math.max(-goalDepth + 10 + arenaRadius, Math.min(width + goalDepth - 10 - arenaRadius, p.x));
+        if (p.x < 0 || p.x > width) {
+          p.y = Math.max(goalTop + arenaRadius, Math.min(goalBottom - arenaRadius, p.y));
+        }
+      }
       p.y = Math.max(arenaRadius, Math.min(height - arenaRadius, p.y));
 
       // Player-Ball Collision & Kicks
