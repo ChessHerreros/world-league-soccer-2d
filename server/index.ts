@@ -40,12 +40,12 @@ interface RoomPlayer {
 
 interface RoomState {
   id: string;
+  code: string;
   hostId: string;
-  mode: string;
   status: "lobby" | "playing";
   blueScore: number;
   redScore: number;
-  duration: number;
+  duration: number; // in seconds
   timeRemaining: number;
   isExtraTime: boolean;
   ball: {
@@ -68,16 +68,49 @@ function generateRoomCode(): string {
   return rooms[code] ? generateRoomCode() : code;
 }
 
-// 60 FPS Game Loop for Active Multiplayer Rooms
+function resetPositions(room: RoomState): void {
+  const width = 1000;
+  const height = 600;
+
+  room.ball.x = width / 2;
+  room.ball.y = height / 2;
+  room.ball.vx = 0;
+  room.ball.vy = 0;
+
+  const playerList = Object.values(room.players);
+  const blueList = playerList.filter(p => p.team === "blue");
+  const redList = playerList.filter(p => p.team === "red");
+
+  const blueStartX = Math.floor(width * 0.22);
+  const redStartX = Math.floor(width * 0.78);
+
+  blueList.forEach((p, i) => {
+    p.x = blueStartX - i * 60;
+    p.y = height / 2 + (i - (blueList.length - 1) / 2) * 90;
+    p.vx = 0;
+    p.vy = 0;
+    p.stamina = 100;
+  });
+
+  redList.forEach((p, i) => {
+    p.x = redStartX + i * 60;
+    p.y = height / 2 + (i - (redList.length - 1) / 2) * 90;
+    p.vx = 0;
+    p.vy = 0;
+    p.stamina = 100;
+  });
+}
+
+// 60 FPS Centralized Authoritative Game Loop
 const TICK = 1 / 60;
 setInterval(() => {
-  for (const roomId in rooms) {
-    const room = rooms[roomId];
+  for (const code in rooms) {
+    const room = rooms[code];
     if (room.status !== "playing") continue;
 
-    // Update match time
+    // 1. Update Match Clock on Server
     if (room.isExtraTime) {
-      // Golden Goal
+      // Extra time / Golden Goal
     } else if (room.duration > 0) {
       room.timeRemaining = Math.max(0, room.timeRemaining - TICK);
       if (room.timeRemaining <= 0) {
@@ -87,45 +120,51 @@ setInterval(() => {
       }
     }
 
-    // Physics Update on Server
+    // 2. Arena Dimensions & Parameters
     const width = 1000;
     const height = 600;
     const goalWidth = 200;
     const goalTop = (height - goalWidth) / 2;
     const goalBottom = goalTop + goalWidth;
     const goalDepth = 65;
-    const arenaRadius = 22;
+    const playerRadius = 22;
     const ballRadius = 13;
 
-    // Update Ball Physics
+    // 3. Update Ball Physics
     room.ball.x += room.ball.vx * TICK;
     room.ball.y += room.ball.vy * TICK;
     room.ball.vx *= Math.pow(0.98, TICK * 60);
     room.ball.vy *= Math.pow(0.98, TICK * 60);
 
     // Ball Arena & Goal Net Collisions
-    if (room.ball.y - ballRadius < 0) { room.ball.y = ballRadius; room.ball.vy = Math.abs(room.ball.vy) * 0.7; }
-    if (room.ball.y + ballRadius > height) { room.ball.y = height - ballRadius; room.ball.vy = -Math.abs(room.ball.vy) * 0.7; }
+    const ballInGoalY = room.ball.y >= goalTop && room.ball.y <= goalBottom;
 
-    const inGoalY = room.ball.y >= goalTop && room.ball.y <= goalBottom;
+    if (room.ball.y - ballRadius < 0) {
+      room.ball.y = ballRadius;
+      room.ball.vy = Math.abs(room.ball.vy) * 0.7;
+    }
+    if (room.ball.y + ballRadius > height) {
+      room.ball.y = height - ballRadius;
+      room.ball.vy = -Math.abs(room.ball.vy) * 0.7;
+    }
 
-    if (!inGoalY && room.ball.x - ballRadius < 0) {
+    if (!ballInGoalY && room.ball.x - ballRadius < 0) {
       room.ball.x = ballRadius;
       room.ball.vx = Math.abs(room.ball.vx) * 0.7;
-    } else if (inGoalY && room.ball.x - ballRadius < -goalDepth) {
+    } else if (ballInGoalY && room.ball.x - ballRadius < -goalDepth) {
       room.ball.x = -goalDepth + ballRadius;
       room.ball.vx = Math.abs(room.ball.vx) * 0.35;
     }
 
-    if (!inGoalY && room.ball.x + ballRadius > width) {
+    if (!ballInGoalY && room.ball.x + ballRadius > width) {
       room.ball.x = width - ballRadius;
       room.ball.vx = -Math.abs(room.ball.vx) * 0.7;
-    } else if (inGoalY && room.ball.x + ballRadius > width + goalDepth) {
+    } else if (ballInGoalY && room.ball.x + ballRadius > width + goalDepth) {
       room.ball.x = width + goalDepth - ballRadius;
       room.ball.vx = -Math.abs(room.ball.vx) * 0.35;
     }
 
-    // Top/Bottom net walls for deep goals
+    // Top/Bottom net walls inside goals
     if (room.ball.x < 0 || room.ball.x > width) {
       if (room.ball.y - ballRadius < goalTop) {
         room.ball.y = goalTop + ballRadius;
@@ -137,22 +176,24 @@ setInterval(() => {
       }
     }
 
-    // Check Goals
-    if (room.ball.x < -ballRadius && inGoalY) {
+    // Check Goal Scoring
+    if (room.ball.x < -ballRadius && ballInGoalY) {
       room.redScore++;
       resetPositions(room);
-    } else if (room.ball.x > width + ballRadius && inGoalY) {
+    } else if (room.ball.x > width + ballRadius && ballInGoalY) {
       room.blueScore++;
       resetPositions(room);
     }
 
-    // Update Players & Skill Moves
-    for (const pid in room.players) {
-      const p = room.players[pid];
+    // 4. Update Players Physics & Inputs
+    for (const socketId in room.players) {
+      const p = room.players[socketId];
       const inp = p.input;
 
-      // Handle Skill Dribble
-      if (inp.dribble && distToBall(p, room.ball) <= arenaRadius + 30) {
+      // Handle Skill Moves (Dash & Skill Dribble)
+      const distToBall = Math.hypot(room.ball.x - p.x, room.ball.y - p.y);
+
+      if (inp.dribble && distToBall <= playerRadius + 30) {
         const dx = room.ball.x - p.x;
         const dy = room.ball.y - p.y;
         const distance = Math.hypot(dx, dy) || 1;
@@ -163,16 +204,16 @@ setInterval(() => {
         let dragX = inp.dribble === "left" ? (-fy + fx * forwardBias) : (fy + fx * forwardBias);
         let dragY = inp.dribble === "left" ? (fx + fy * forwardBias) : (-fx + fy * forwardBias);
         const dragLen = Math.hypot(dragX, dragY) || 1;
-        dragX /= dragLen; dragY /= dragLen;
+        dragX /= dragLen;
+        dragY /= dragLen;
 
         room.ball.vx += dragX * 160;
         room.ball.vy += dragY * 160;
         p.vx += dragX * 45;
         p.vy += dragY * 45;
-        inp.dribble = null; // consume
+        inp.dribble = null;
       }
 
-      // Handle Dash Skill Move
       if (inp.dash && p.stamina >= 50) {
         p.stamina = Math.max(0, p.stamina - 50);
         let dx = inp.moveX;
@@ -182,12 +223,13 @@ setInterval(() => {
           dx = p.team === "blue" ? 1 : -1;
           dy = 0;
         } else {
-          dx /= len; dy /= len;
+          dx /= len;
+          dy /= len;
         }
         const dashImpulse = 1050;
         p.vx = dx * dashImpulse;
         p.vy = dy * dashImpulse;
-        inp.dash = false; // consume
+        inp.dash = false;
       }
 
       const accel = inp.sprint && p.stamina > 2 ? 2400 : 1800;
@@ -217,26 +259,25 @@ setInterval(() => {
 
       // Arena bounds for players (allowing entry inside goal nets)
       const pInGoalY = p.y >= goalTop && p.y <= goalBottom;
-
       if (!pInGoalY) {
-        p.x = Math.max(arenaRadius, Math.min(width - arenaRadius, p.x));
+        p.x = Math.max(playerRadius, Math.min(width - playerRadius, p.x));
       } else {
-        p.x = Math.max(-goalDepth + 10 + arenaRadius, Math.min(width + goalDepth - 10 - arenaRadius, p.x));
+        p.x = Math.max(-goalDepth + 10 + playerRadius, Math.min(width + goalDepth - 10 - playerRadius, p.x));
         if (p.x < 0 || p.x > width) {
-          p.y = Math.max(goalTop + arenaRadius, Math.min(goalBottom - arenaRadius, p.y));
+          p.y = Math.max(goalTop + playerRadius, Math.min(goalBottom - playerRadius, p.y));
         }
       }
-      p.y = Math.max(arenaRadius, Math.min(height - arenaRadius, p.y));
+      p.y = Math.max(playerRadius, Math.min(height - playerRadius, p.y));
 
       // Player-Ball Collision & Kicks
       const dx = room.ball.x - p.x;
       const dy = room.ball.y - p.y;
       const dist = Math.hypot(dx, dy);
 
-      if (dist < arenaRadius + ballRadius) {
+      if (dist < playerRadius + ballRadius) {
         const nx = dx / (dist || 1);
         const ny = dy / (dist || 1);
-        const overlap = (arenaRadius + ballRadius) - dist;
+        const overlap = (playerRadius + ballRadius) - dist;
         room.ball.x += nx * overlap;
         room.ball.y += ny * overlap;
 
@@ -251,11 +292,11 @@ setInterval(() => {
         const kPwr = 520;
         room.ball.vx += nx * kPwr;
         room.ball.vy += ny * kPwr;
-        inp.kick = false; // consume
+        inp.kick = false;
       }
     }
 
-    // Inter-Player Collisions on Server
+    // 5. Inter-Player Collisions on Server
     const playerList = Object.values(room.players);
     for (let i = 0; i < playerList.length; i++) {
       for (let j = i + 1; j < playerList.length; j++) {
@@ -263,7 +304,7 @@ setInterval(() => {
         const pB = playerList[j];
         const dx = pB.x - pA.x;
         const dy = pB.y - pA.y;
-        const minDist = arenaRadius * 2;
+        const minDist = playerRadius * 2;
         const distSq = dx * dx + dy * dy;
         if (distSq < minDist * minDist) {
           const dist = Math.sqrt(distSq) || 0.0001;
@@ -278,56 +319,22 @@ setInterval(() => {
       }
     }
 
-    // Broadcast room state to all clients in room
-    io.to(roomId).emit("roomStateUpdate", room);
+    // 6. Broadcast Authoritative Game State ONLY to Clients in THIS Room
+    io.to(code).emit("roomStateUpdate", room);
   }
 }, 1000 / 60);
 
-function distToBall(p: RoomPlayer, ball: { x: number; y: number }): number {
-  return Math.hypot(ball.x - p.x, ball.y - p.y);
-}
-
-function resetPositions(room: RoomState): void {
-  const width = 1000;
-  const height = 600;
-
-  room.ball.x = width / 2;
-  room.ball.y = height / 2;
-  room.ball.vx = 0;
-  room.ball.vy = 0;
-
-  const playerList = Object.values(room.players);
-  const blueList = playerList.filter(p => p.team === "blue");
-  const redList = playerList.filter(p => p.team === "red");
-
-  const blueStartX = Math.floor(width * 0.22);
-  const redStartX = Math.floor(width * 0.78);
-
-  blueList.forEach((p, i) => {
-    p.x = blueStartX - i * 60;
-    p.y = height / 2 + (i - (blueList.length - 1) / 2) * 90;
-    p.vx = 0; p.vy = 0;
-  });
-
-  redList.forEach((p, i) => {
-    p.x = redStartX + i * 60;
-    p.y = height / 2 + (i - (redList.length - 1) / 2) * 90;
-    p.vx = 0; p.vy = 0;
-  });
-}
-
+// Socket.io Connection & Room Handlers
 io.on("connection", (socket: Socket) => {
   console.log(`[Multiplayer] Client connected: ${socket.id}`);
 
   // Create Room
-  socket.on("createRoom", (data: { playerName: string; peerId?: string; config: any }, callback: (res: any) => void) => {
+  socket.on("createRoom", (data: { playerName: string; config: any }, callback: (res: any) => void) => {
     const code = generateRoomCode();
-    const room: RoomState & { code: string; hostPeerId?: string } = {
+    const room: RoomState = {
       id: code,
       code: code,
       hostId: socket.id,
-      hostPeerId: data.peerId,
-      mode: data.config?.mode || "ONLINE",
       status: "lobby",
       blueScore: 0,
       redScore: 0,
@@ -339,7 +346,7 @@ io.on("connection", (socket: Socket) => {
         [socket.id]: {
           id: socket.id,
           socketId: socket.id,
-          name: data.playerName || "Player 1",
+          name: data.playerName || "Host",
           team: "blue",
           x: 220,
           y: 300,
@@ -362,9 +369,9 @@ io.on("connection", (socket: Socket) => {
     callback({ success: true, roomCode: code, room });
   });
 
-  // Join Room with Code
-  socket.on("joinRoom", (data: { roomCode: string; peerId?: string; playerName: string; config: any }, callback: (res: any) => void) => {
-    const code = data.roomCode.toUpperCase().trim();
+  // Join Room
+  socket.on("joinRoom", (data: { roomCode: string; playerName: string; config: any }, callback: (res: any) => void) => {
+    const code = (data.roomCode || "").toUpperCase().trim();
     const room = rooms[code];
 
     if (!room) {
@@ -379,7 +386,7 @@ io.on("connection", (socket: Socket) => {
     const newPlayer: RoomPlayer = {
       id: socket.id,
       socketId: socket.id,
-      name: data.playerName || `Player ${playerList.length + 1}`,
+      name: data.playerName || `Jugador ${playerList.length + 1}`,
       team: assignedTeam,
       x: assignedTeam === "blue" ? 220 : 780,
       y: 300,
@@ -404,40 +411,35 @@ io.on("connection", (socket: Socket) => {
 
   // Switch Team in Lobby
   socket.on("switchTeam", (data: { roomCode: string; team: "blue" | "red" }) => {
-    const room = rooms[data.roomCode];
+    const code = (data.roomCode || "").toUpperCase().trim();
+    const room = rooms[code];
     if (room && room.players[socket.id]) {
       room.players[socket.id].team = data.team;
-      io.to(data.roomCode).emit("roomUpdated", room);
+      io.to(code).emit("roomUpdated", room);
     }
   });
 
-  // Host starts game
+  // Host Starts Match
   socket.on("startGame", (data: { roomCode: string }) => {
-    const room = rooms[data.roomCode];
+    const code = (data.roomCode || "").toUpperCase().trim();
+    const room = rooms[code];
     if (room && room.hostId === socket.id) {
       room.status = "playing";
       resetPositions(room);
-      io.to(data.roomCode).emit("gameStarted", room);
+      io.to(code).emit("gameStarted", room);
     }
   });
 
-  // Relay Host State directly to other players in room
-  socket.on("hostStateUpdate", (data: { roomCode: string; state: any }) => {
-    socket.to(data.roomCode).emit("hostStateUpdate", data.state);
-  });
-
-  // Receive Player Inputs and relay to host
+  // Receive Player Controls/Input (Isolated per room)
   socket.on("playerInput", (data: { roomCode: string; input: PlayerInput }) => {
-    const room = rooms[data.roomCode];
-    if (room) {
-      if (room.players[socket.id]) {
-        room.players[socket.id].input = data.input;
-      }
-      socket.to(data.roomCode).emit("playerInputRelay", { socketId: socket.id, input: data.input });
+    const code = (data.roomCode || "").toUpperCase().trim();
+    const room = rooms[code];
+    if (room && room.players[socket.id] && data.input) {
+      room.players[socket.id].input = data.input;
     }
   });
 
-  // Handle Disconnect
+  // Handle Disconnection
   socket.on("disconnect", () => {
     for (const code in rooms) {
       const room = rooms[code];
@@ -457,5 +459,5 @@ io.on("connection", (socket: Socket) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`⚽ World of Football Server running on http://localhost:${PORT}`);
+  console.log(`⚽ World League Soccer Authoritative Server running on port ${PORT}`);
 });
