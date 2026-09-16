@@ -117,12 +117,22 @@ export class Game {
         }
       }
 
-      // Sync Ball Position, Velocity & Charge Ratio from Server
-      if (roomState.ball) {
-        this.ball.position.set(roomState.ball.x, roomState.ball.y);
-        this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
-        this.ball.chargeRatio = roomState.ball.chargeRatio || 0;
+      // Sync server countdown state
+      if (roomState.status === "countdown" && !this.isReplayingGoal && this.goalBannerTimer <= 0) {
+        if (this.countdownTimer <= 0) {
+          this.countdownTimer = roomState.countdownTimer || 3.8;
+          this.lastCountdownSec = 4;
+          this.playedGoSound = false;
+        }
       }
+
+      // Sync Ball Position, Velocity & Charge Ratio from Server (only when NOT viewing goal replay!)
+      if (!this.isReplayingGoal) {
+        if (roomState.ball) {
+          this.ball.position.set(roomState.ball.x, roomState.ball.y);
+          this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
+          this.ball.chargeRatio = roomState.ball.chargeRatio || 0;
+        }
 
       // Sync Server Players array into Local Render Entities preserving state
       const serverPlayers: any[] = Object.values(roomState.players || {});
@@ -187,8 +197,9 @@ export class Game {
         }
       });
 
-      if (this.players.length > otherSps.length + 1) {
-        this.players.length = otherSps.length + 1;
+        if (this.players.length > otherSps.length + 1) {
+          this.players.length = otherSps.length + 1;
+        }
       }
     });
   }
@@ -377,6 +388,21 @@ export class Game {
       let countdownProgress = 0;
       let goalBanner: { team: "blue" | "red"; progress: number } | null = null;
 
+      // In offline mode, keep the match timer display updated and visible during countdown / goal / replay
+      if (!this.isOnlineMode) {
+        if (this.isExtraTime) {
+          this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
+        } else if (this.matchConfig.duration > 0) {
+          const totalSec = Math.ceil(this.matchTimeRemaining);
+          const mins = Math.floor(totalSec / 60);
+          const secs = totalSec % 60;
+          const formatted = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+          this.options.onTimeUpdate?.(formatted, totalSec, false);
+        } else {
+          this.options.onTimeUpdate?.("∞", 0, false);
+        }
+      }
+
       if (this.isReplayingGoal) {
         // --- GOAL REPLAY PLAYBACK MODE ---
         this.replayTimer -= delta;
@@ -449,16 +475,8 @@ export class Game {
         this.recordFrame();
         // Update Match Time (In online mode, server controls match timer 100%)
         if (!this.isOnlineMode) {
-          if (this.isExtraTime) {
-            this.options.onTimeUpdate?.("EXTRA TIME", 0, true);
-          } else if (this.matchConfig.duration > 0) {
+          if (!this.isExtraTime && this.matchConfig.duration > 0) {
             this.matchTimeRemaining = Math.max(0, this.matchTimeRemaining - delta);
-            const totalSec = Math.ceil(this.matchTimeRemaining);
-            const mins = Math.floor(totalSec / 60);
-            const secs = totalSec % 60;
-            const formatted = `${mins}:${secs < 10 ? "0" : ""}${secs}`;
-            this.options.onTimeUpdate?.(formatted, totalSec, false);
-
             if (this.matchTimeRemaining <= 0) {
               if (this.blueScore === this.redScore) {
                 // Tie match enters Extra Time (Golden Goal)!
@@ -468,8 +486,6 @@ export class Game {
                 this.triggerGameOver();
               }
             }
-          } else {
-            this.options.onTimeUpdate?.("∞", 0, false);
           }
         }
 

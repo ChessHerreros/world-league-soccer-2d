@@ -52,7 +52,10 @@ interface RoomState {
   id: string;
   code: string;
   hostId: string;
-  status: "lobby" | "playing";
+  status: "lobby" | "countdown" | "playing" | "goal" | "ended";
+  countdownTimer: number;
+  goalTimer: number;
+  lastScorerTeam: "blue" | "red" | null;
   blueScore: number;
   redScore: number;
   duration: number;
@@ -284,9 +287,36 @@ const TICK = 1 / 60;
 setInterval(() => {
   for (const code in rooms) {
     const room = rooms[code];
-    if (room.status !== "playing") continue;
+    if (room.status === "lobby" || room.status === "ended") continue;
 
-    // 1. Update Match Clock on Server
+    // A. COUNTDOWN PHASE (3, 2, 1, ¡GO!)
+    if (room.status === "countdown") {
+      resetPositions(room);
+      room.countdownTimer -= TICK;
+      if (room.countdownTimer <= 0) {
+        room.status = "playing";
+        room.countdownTimer = 0;
+      }
+      io.to(code).emit("roomStateUpdate", room);
+      continue;
+    }
+
+    // B. GOAL CELEBRATION & REPLAY PHASE
+    if (room.status === "goal") {
+      resetPositions(room);
+      room.goalTimer -= TICK;
+      if (room.goalTimer <= 0) {
+        room.status = "countdown";
+        room.countdownTimer = 3.8;
+        room.goalTimer = 0;
+        resetPositions(room);
+      }
+      io.to(code).emit("roomStateUpdate", room);
+      continue;
+    }
+
+    // C. ACTIVE PLAYING PHASE
+    // 1. Update Match Clock on Server (ONLY WHEN PLAYING!)
     if (room.isExtraTime) {
       // Golden Goal
     } else if (room.duration > 0) {
@@ -294,6 +324,8 @@ setInterval(() => {
       if (room.timeRemaining <= 0) {
         if (room.blueScore === room.redScore) {
           room.isExtraTime = true;
+        } else {
+          room.status = "ended";
         }
       }
     }
@@ -385,10 +417,20 @@ setInterval(() => {
     // Check Goal Scoring
     if (room.ball.x < -ballRadius && ballInGoalY) {
       room.redScore++;
+      room.lastScorerTeam = "red";
+      room.status = "goal";
+      room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
       resetPositions(room);
+      io.to(code).emit("roomStateUpdate", room);
+      continue;
     } else if (room.ball.x > width + ballRadius && ballInGoalY) {
       room.blueScore++;
+      room.lastScorerTeam = "blue";
+      room.status = "goal";
+      room.goalTimer = 6.8; // 1.6s goal banner + 5.2s slow-mo replay
       resetPositions(room);
+      io.to(code).emit("roomStateUpdate", room);
+      continue;
     }
 
     // 4. Update Players Physics, Cooldowns, Charge & Inputs
@@ -666,6 +708,9 @@ io.on("connection", (socket: Socket) => {
       code: code,
       hostId: socket.id,
       status: "lobby",
+      countdownTimer: 0,
+      goalTimer: 0,
+      lastScorerTeam: null,
       blueScore: 0,
       redScore: 0,
       duration: cfg.duration || 180,
@@ -773,9 +818,13 @@ io.on("connection", (socket: Socket) => {
     const code = (data.roomCode || "").toUpperCase().trim();
     const room = rooms[code];
     if (room && room.hostId === socket.id) {
-      room.status = "playing";
+      room.status = "countdown";
+      room.countdownTimer = 3.8;
+      room.goalTimer = 0;
+      room.timeRemaining = room.duration || 180;
       resetPositions(room);
       io.to(code).emit("gameStarted", room);
+      io.to(code).emit("roomStateUpdate", room);
     }
   });
 
