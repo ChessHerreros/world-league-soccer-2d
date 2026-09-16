@@ -114,33 +114,38 @@ export class Game {
       this.redScore = roomState.redScore;
       this.options.onScore?.(this.blueScore, this.redScore);
 
-      // Sync Ball Position & Velocity from Host
-      if (roomState.ball) {
-        this.ball.position.set(roomState.ball.x, roomState.ball.y);
-        this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
-      }
+      // GUEST: Mirror Host's physics state exactly!
+      if (!netManager.getIsHost()) {
+        // Sync Ball Position & Velocity from Host
+        if (roomState.ball) {
+          this.ball.position.set(roomState.ball.x, roomState.ball.y);
+          this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
+        }
 
-      // Sync Host Players array to Guest
-      if (!netManager.getIsHost() && Array.isArray(roomState.players)) {
-        const guestP1 = this.players[0]; // Local guest player
-        roomState.players.forEach((sp: any, idx: number) => {
-          if (idx === 0) {
-            // Host player entity rendered on guest
-            if (!this.players[1]) {
-              this.players[1] = new Player({ position: new Vec2(sp.x, sp.y), team: sp.team });
-            }
-            this.players[1].position.set(sp.x, sp.y);
-            this.players[1].velocity.set(sp.vx, sp.vy);
-            this.players[1].name = sp.name;
-            this.players[1].jerseyNumber = sp.jerseyNumber;
-          } else if (idx === 1 && guestP1) {
-            // Reconcile guest position with host state smoothly
-            const dist = Math.hypot(guestP1.position.x - sp.x, guestP1.position.y - sp.y);
-            if (dist > 60) {
-              guestP1.position.set(sp.x, sp.y);
-            }
+        // Sync Host & Guest player entities
+        if (Array.isArray(roomState.players)) {
+          const hostData = roomState.players[0];  // Host is index 0 on Host
+          const guestData = roomState.players[1]; // Guest is index 1 on Host
+
+          // Local Guest player entity (rendered at index 0 on Guest screen)
+          if (guestData && this.players[0]) {
+            this.players[0].position.set(guestData.x, guestData.y);
+            this.players[0].velocity.set(guestData.vx, guestData.vy);
+            this.players[0].name = guestData.name;
+            this.players[0].jerseyNumber = guestData.jerseyNumber;
           }
-        });
+
+          // Remote Host player entity (rendered at index 1 on Guest screen)
+          if (hostData) {
+            if (!this.players[1]) {
+              this.players[1] = new Player({ position: new Vec2(hostData.x, hostData.y), team: hostData.team });
+            }
+            this.players[1].position.set(hostData.x, hostData.y);
+            this.players[1].velocity.set(hostData.vx, hostData.vy);
+            this.players[1].name = hostData.name;
+            this.players[1].jerseyNumber = hostData.jerseyNumber;
+          }
+        }
       }
     });
   }
