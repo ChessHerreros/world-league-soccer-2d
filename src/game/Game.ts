@@ -265,8 +265,8 @@ export class Game {
     this.lastTime = time;
     delta = Math.min(delta, 0.1);
 
-    // ESC or P key toggle pause
-    if (this.input.consumePressed("escape") || this.input.consumePressed("p")) {
+    // ESC or P key toggle pause (disabled in demo mode background)
+    if (!this.isDemoMode && (this.input.consumePressed("escape") || this.input.consumePressed("p"))) {
       this.togglePause();
     }
 

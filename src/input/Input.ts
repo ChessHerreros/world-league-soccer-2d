@@ -5,6 +5,10 @@ export class Input {
 
   constructor() {
     window.addEventListener("keydown", (e) => {
+      // Do not capture game inputs if typing in text inputs or textareas
+      const targetTag = (e.target as HTMLElement)?.tagName;
+      if (targetTag === "INPUT" || targetTag === "TEXTAREA") return;
+
       const key = e.key.toLowerCase();
       if (!this.keys.has(key)) this.pressed.add(key);
       this.keys.add(key);
