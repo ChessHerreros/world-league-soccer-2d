@@ -49,9 +49,9 @@ netManager.onRoomUpdated((room) => {
 
 netManager.onGameStarted((_room) => {
   menu.hideOverlay();
-  // Start match visualization connected to server state
+  game.setOnlineNetworkManager(netManager);
   game.configureAndStart({
-    mode: "VS_AI",
+    mode: "ONLINE",
     duration: 180,
     goalLimit: 5,
     skinIndex: 0,
@@ -60,6 +60,7 @@ netManager.onGameStarted((_room) => {
     customColor: null,
     borderStyle: "classic",
     pattern: "spain",
+    isOnline: true,
   });
 });
 
