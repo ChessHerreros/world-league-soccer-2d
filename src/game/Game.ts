@@ -86,47 +86,62 @@ export class Game {
     this.netManager = netManager;
     this.isOnlineMode = true;
 
+    // Host listens for Guest inputs over WebRTC / Server signaling
+    if (netManager.getIsHost()) {
+      netManager.onGuestInput((guestInput: any) => {
+        if (!this.isOnlineMode || this.players.length < 2) return;
+        const guestPlayer = this.players[1]; // Guest player entity in Host game loop
+        if (guestPlayer && guestInput) {
+          guestPlayer.update(TICK, guestInput.moveX, guestInput.moveY, guestInput.sprint);
+          if (guestInput.dash && guestPlayer.canDash()) {
+            this.performDash(guestPlayer, guestInput.moveX, guestInput.moveY);
+          }
+          if (guestInput.dribble && guestPlayer.canDribble()) {
+            this.dribble(guestPlayer, guestInput.dribble);
+          }
+          if (guestInput.kick && guestPlayer.canKick() && Math.hypot(this.ball.position.x - guestPlayer.position.x, this.ball.position.y - guestPlayer.position.y) <= guestPlayer.kickRadius) {
+            this.kick(guestPlayer);
+          }
+        }
+      });
+    }
+
     netManager.onRoomStateUpdate((roomState: any) => {
       if (!this.isOnlineMode || !roomState) return;
 
-      // Sync Scores & Time from Server
+      // Sync Scores & Time from Host
       this.blueScore = roomState.blueScore;
       this.redScore = roomState.redScore;
       this.options.onScore?.(this.blueScore, this.redScore);
 
-      // Sync Ball Position & Velocity from Server
+      // Sync Ball Position & Velocity from Host
       if (roomState.ball) {
         this.ball.position.set(roomState.ball.x, roomState.ball.y);
         this.ball.velocity.set(roomState.ball.vx, roomState.ball.vy);
       }
 
-      // Sync Server Players into Local Render Array
-      const serverPlayers = Object.values(roomState.players || {});
-      const localSocketId = netManager.getSocket()?.id;
-
-      // Map server players to local player entities
-      this.players.length = 0;
-      serverPlayers.forEach((sp: any) => {
-        const isLocal = sp.socketId === localSocketId;
-        const p = new Player({
-          position: new Vec2(sp.x, sp.y),
-          team: sp.team,
+      // Sync Host Players array to Guest
+      if (!netManager.getIsHost() && Array.isArray(roomState.players)) {
+        const guestP1 = this.players[0]; // Local guest player
+        roomState.players.forEach((sp: any, idx: number) => {
+          if (idx === 0) {
+            // Host player entity rendered on guest
+            if (!this.players[1]) {
+              this.players[1] = new Player({ position: new Vec2(sp.x, sp.y), team: sp.team });
+            }
+            this.players[1].position.set(sp.x, sp.y);
+            this.players[1].velocity.set(sp.vx, sp.vy);
+            this.players[1].name = sp.name;
+            this.players[1].jerseyNumber = sp.jerseyNumber;
+          } else if (idx === 1 && guestP1) {
+            // Reconcile guest position with host state smoothly
+            const dist = Math.hypot(guestP1.position.x - sp.x, guestP1.position.y - sp.y);
+            if (dist > 60) {
+              guestP1.position.set(sp.x, sp.y);
+            }
+          }
         });
-        p.velocity.set(sp.vx, sp.vy);
-        p.stamina = sp.stamina;
-        p.isSprinting = sp.isSprinting;
-        p.jerseyNumber = sp.jerseyNumber;
-        p.name = sp.name;
-        p.customColor = sp.customColor;
-        p.borderStyle = sp.borderStyle || "classic";
-        p.pattern = sp.pattern || "spain";
-        
-        if (isLocal) {
-          this.players.unshift(p); // Put local player at index 0
-        } else {
-          this.players.push(p);
-        }
-      });
+      }
     });
   }
 
@@ -447,7 +462,7 @@ export class Game {
     const p1 = this.players[0];
 
     if (this.isOnlineMode && this.netManager) {
-      // In online mode, capture inputs and emit to server
+      const isHost = this.netManager.getIsHost();
       const p1Movement = this.input.movementP1();
       const p1WantSprint = this.input.down("shift");
       const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
@@ -455,15 +470,69 @@ export class Game {
       const ePressed = this.input.consumePressed("e");
       const cPressed = this.input.consumePressed("c");
 
-      this.netManager.sendInput({
+      const myInput = {
         moveX: p1Movement.x,
         moveY: p1Movement.y,
         sprint: p1WantSprint,
         kick: spacePressed,
-        dribble: qPressed ? "right" : ePressed ? "left" : null,
+        dribble: qPressed ? ("right" as const) : ePressed ? ("left" as const) : null,
         dash: cPressed,
-      });
-      return; // Physics and movement are authoritative on server!
+      };
+
+      if (!isHost) {
+        // GUEST: Send input to Host via WebRTC/Server, and predict local player movement
+        this.netManager.sendInput(myInput);
+        if (p1) {
+          p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint);
+          if (cPressed && p1.canDash()) {
+            this.performDash(p1, p1Movement.x, p1Movement.y);
+          }
+          if (spacePressed && p1.canKick() && Math.hypot(this.ball.position.x - p1.position.x, this.ball.position.y - p1.position.y) <= p1.kickRadius) {
+            this.kick(p1);
+          }
+        }
+        return;
+      } else {
+        // HOST: Process Host player (p1) locally
+        if (p1) {
+          p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint);
+          if (cPressed && p1.canDash()) {
+            this.performDash(p1, p1Movement.x, p1Movement.y);
+          }
+          if ((qPressed || ePressed) && p1.canDribble()) {
+            this.dribble(p1, qPressed ? "right" : "left");
+          }
+          if (spacePressed && p1.canKick() && Math.hypot(this.ball.position.x - p1.position.x, this.ball.position.y - p1.position.y) <= p1.kickRadius) {
+            this.kick(p1);
+          }
+        }
+
+        // Broadcast current physics state to Guest
+        this.netManager.broadcastHostState({
+          blueScore: this.blueScore,
+          redScore: this.redScore,
+          ball: {
+            x: this.ball.position.x,
+            y: this.ball.position.y,
+            vx: this.ball.velocity.x,
+            vy: this.ball.velocity.y,
+          },
+          players: this.players.map((p) => ({
+            x: p.position.x,
+            y: p.position.y,
+            vx: p.velocity.x,
+            vy: p.velocity.y,
+            stamina: p.stamina,
+            isSprinting: p.isSprinting,
+            jerseyNumber: p.jerseyNumber,
+            name: p.name,
+            team: p.team,
+            customColor: p.customColor,
+            borderStyle: p.borderStyle,
+            pattern: p.pattern,
+          })),
+        });
+      }
     } else if (this.isDemoMode) {
       // In background demo match, P1 is driven by Bot AI as well!
       const p1Action = this.botBrain.update(dt, p1, this.players, this.ball, this.arena, 0);
