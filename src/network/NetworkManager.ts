@@ -15,9 +15,9 @@ export class NetworkManager {
 
   connect(serverUrl?: string): Socket {
     if (!this.socket) {
-      // If no serverUrl provided, detect host dynamically so local network / friends can connect
-      const host = window.location.hostname || "localhost";
-      const targetUrl = serverUrl || `http://${host}:3001`;
+      // Connect to Render backend in production, or fallback to localhost in local dev
+      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      const targetUrl = serverUrl || (isLocal ? "http://localhost:3001" : "https://world-league-soccer-2d.onrender.com");
       
       this.socket = io(targetUrl, {
         autoConnect: true,
@@ -37,41 +37,18 @@ export class NetworkManager {
 
   createRoom(playerName: string, config: any, callback: (res: any) => void): void {
     const socket = this.connect();
-    let responded = false;
-
-    const timer = setTimeout(() => {
-      if (!responded) {
-        responded = true;
-        // Fallback local room generator if remote websocket server is offline/unreachable
-        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-        this.currentRoomCode = code;
-        const fakeRoom = {
-          code,
-          hostId: socket.id || "local_host",
-          players: [
-            { id: socket.id || "local_host", name: playerName, team: "blue" }
-          ]
-        };
-        callback({ success: true, roomCode: code, room: fakeRoom });
-      }
-    }, 1200);
-
     socket.emit("createRoom", { playerName, config }, (res: any) => {
-      if (!responded) {
-        responded = true;
-        clearTimeout(timer);
-        if (res && res.success) {
-          this.currentRoomCode = res.roomCode;
-        }
-        callback(res);
+      if (res && res.success) {
+        this.currentRoomCode = res.roomCode;
       }
+      callback(res);
     });
   }
 
   joinRoom(roomCode: string, playerName: string, config: any, callback: (res: any) => void): void {
     const socket = this.connect();
     socket.emit("joinRoom", { roomCode, playerName, config }, (res: any) => {
-      if (res.success) {
+      if (res && res.success) {
         this.currentRoomCode = res.roomCode;
       }
       callback(res);
