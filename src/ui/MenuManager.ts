@@ -740,8 +740,15 @@ export class MenuManager {
     this.overlay.style.display = "flex";
     const isHost = room.hostId === localSocketId;
 
-    const bluePlayers = room.players.filter((p: any) => p.team === "blue");
-    const redPlayers = room.players.filter((p: any) => p.team === "red");
+    // Normalize room.players whether it's an Array or Record object from server
+    const playerList: any[] = Array.isArray(room.players)
+      ? room.players
+      : room.players && typeof room.players === "object"
+      ? Object.values(room.players)
+      : [];
+
+    const bluePlayers = playerList.filter((p: any) => p.team === "blue");
+    const redPlayers = playerList.filter((p: any) => p.team === "red");
 
     this.overlay.innerHTML = `
       <div class="roblox-inv-modal settings-modal-card" style="max-width: 680px;">
