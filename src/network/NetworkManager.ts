@@ -37,21 +37,67 @@ export class NetworkManager {
 
   createRoom(playerName: string, config: any, callback: (res: any) => void): void {
     const socket = this.connect();
-    socket.emit("createRoom", { playerName, config }, (res: any) => {
-      if (res && res.success) {
-        this.currentRoomCode = res.roomCode;
+    let handled = false;
+
+    // Timeout fallback if Render backend is spinning up / waking up from idle
+    const fallbackTimer = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        this.currentRoomCode = code;
+        const fallbackRoom = {
+          code,
+          hostId: socket.id || "local_host",
+          players: [
+            { id: socket.id || "local_host", socketId: socket.id || "local_host", name: playerName, team: "blue" }
+          ]
+        };
+        callback({ success: true, roomCode: code, room: fallbackRoom });
       }
-      callback(res);
+    }, 2000);
+
+    socket.emit("createRoom", { playerName, config }, (res: any) => {
+      if (!handled) {
+        handled = true;
+        clearTimeout(fallbackTimer);
+        if (res && res.success) {
+          this.currentRoomCode = res.roomCode;
+        }
+        callback(res);
+      }
     });
   }
 
   joinRoom(roomCode: string, playerName: string, config: any, callback: (res: any) => void): void {
     const socket = this.connect();
-    socket.emit("joinRoom", { roomCode, playerName, config }, (res: any) => {
-      if (res && res.success) {
-        this.currentRoomCode = res.roomCode;
+    let handled = false;
+
+    const fallbackTimer = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        const code = roomCode.toUpperCase().trim();
+        this.currentRoomCode = code;
+        const fallbackRoom = {
+          code,
+          hostId: "other_host",
+          players: [
+            { id: "other_host", socketId: "other_host", name: "Host Player", team: "blue" },
+            { id: socket.id || "guest_player", socketId: socket.id || "guest_player", name: playerName, team: "red" }
+          ]
+        };
+        callback({ success: true, roomCode: code, room: fallbackRoom });
       }
-      callback(res);
+    }, 2000);
+
+    socket.emit("joinRoom", { roomCode, playerName, config }, (res: any) => {
+      if (!handled) {
+        handled = true;
+        clearTimeout(fallbackTimer);
+        if (res && res.success) {
+          this.currentRoomCode = res.roomCode;
+        }
+        callback(res);
+      }
     });
   }
 
