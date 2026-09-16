@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World League Soccer 2D</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" aria-label="Arena 2D"></canvas>
+      <div id="hud">
+        <header class="scoreboard">
+          <div class="team blue">
+            <span class="team-badge"></span>
+            <span class="team-name">BLUE</span>
+          </div>
+          <div class="score-display">
+            <span id="blueScore">0</span>
+            <span class="divider">:</span>
+            <span id="redScore">0</span>
+          </div>
+          <div class="match-time-box">
+            <span class="timer-icon">⏱</span>
+            <span id="matchTimer">3:00</span>
+          </div>
+          <div class="team red">
+            <span class="team-name">RED</span>
+            <span class="team-badge"></span>
+          </div>
+        </header>
+
+        <footer class="controls-bar">
+          <div class="control-item">
+            <div class="kbd-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>KEYS</kbd></div>
+            <span class="label">MOVE</span>
+          </div>
+          <div class="control-item">
+            <div class="kbd-group"><kbd>SHIFT</kbd></div>
+            <span class="label">SPRINT</span>
+          </div>
+          <div class="control-divider"></div>
+          <div class="control-item">
+            <div class="kbd-group"><kbd>C</kbd></div>
+            <span class="label">DASH</span>
+          </div>
+          <div class="control-divider"></div>
+          <div class="control-item">
+            <div class="kbd-group"><kbd>SPACE</kbd></div>
+            <span class="label">SHOOT</span>
+          </div>
+          <div class="control-divider"></div>
+          <div class="control-item">
+            <div class="kbd-group"><kbd>Q</kbd> / <kbd>E</kbd></div>
+            <span class="label">SKILL DRIBBLE</span>
+          </div>
+          <div class="control-divider"></div>
+          <div class="control-item">
+            <div class="kbd-group"><kbd>R</kbd></div>
+            <span class="label">RESET</span>
+          </div>
+        </footer>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

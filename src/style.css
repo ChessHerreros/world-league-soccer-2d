@@ -1,0 +1,1799 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0b0e14;
+  font-family: 'Outfit', -apple-system, system-ui, sans-serif;
+  color: #ffffff;
+  user-select: none;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+}
+
+/* Scoreboard Styling */
+.scoreboard {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(14, 20, 32, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 6px 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.team-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.team.blue .team-name {
+  color: #4da3ff;
+  text-shadow: 0 0 12px rgba(77, 163, 255, 0.5);
+}
+
+.team.red .team-name {
+  color: #ff5b6e;
+  text-shadow: 0 0 12px rgba(255, 91, 110, 0.5);
+}
+
+.team-badge {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.team.blue .team-badge {
+  background: #4da3ff;
+  box-shadow: 0 0 10px #4da3ff;
+}
+
+.team.red .team-badge {
+  background: #ff5b6e;
+  box-shadow: 0 0 10px #ff5b6e;
+}
+
+.score-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: #ffffff;
+}
+
+.score-display .divider {
+  opacity: 0.4;
+}
+
+.match-time-box {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 1px;
+}
+
+.match-time-box .timer-icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+#matchTimer.extra-time {
+  color: #ff3344 !important;
+  text-shadow: 0 0 10px rgba(255, 51, 68, 0.8);
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  animation: extraTimePulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes extraTimePulse {
+  0% { opacity: 0.7; transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1.05); }
+}
+
+/* Controls Bar Styling */
+.controls-bar {
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(12, 16, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kbd-group {
+  display: flex;
+  gap: 4px;
+}
+
+kbd {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 7px;
+  background: linear-gradient(180deg, #2a3346, #1a2233);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  color: #ffffff;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.4);
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.control-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@media (max-width: 768px) {
+  .scoreboard {
+    padding: 8px 18px;
+  }
+  .score-display {
+    font-size: 26px;
+  }
+  .controls-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    padding: 8px 14px;
+  }
+  .control-divider {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   JUICY CARTOON ARCADE MENU SYSTEM STYLING
+   ========================================================================== */
+/* Roblox Football HUD Layout Overlay */
+#menu-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 16, 24, 0.45);
+  backdrop-filter: blur(2px);
+  padding: 0;
+}
+
+.roblox-menu-layout {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 24px;
+  user-select: none;
+  font-family: 'Outfit', sans-serif;
+}
+
+/* Top Navigation Bar */
+.roblox-top-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.top-nav-pill {
+  display: flex;
+  background: #0f141c;
+  padding: 4px;
+  border-radius: 30px;
+  border: 2.5px solid #000000;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  gap: 2px;
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 22px;
+  border-radius: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.nav-tab.active {
+  background: #2b384c;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.nav-tab:hover:not(.active) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tab-badge {
+  background: #ff3344;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.top-right-stats {
+  position: absolute;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.currency-pill {
+  background: #0f141c;
+  border: 2px solid #000000;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Center Match Mode Stage */
+.roblox-center-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: auto 0;
+}
+
+.promo-banner-stack {
+  display: flex;
+  gap: 10px;
+}
+
+.promo-pill {
+  border: 2.5px solid #000000;
+  border-radius: 20px;
+  padding: 6px 18px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease;
+}
+
+.promo-pill:hover {
+  transform: translateY(-2px);
+}
+
+.promo-pill.gold {
+  background: linear-gradient(180deg, #ffcc00, #e6a100);
+  color: #1a1000;
+}
+
+.promo-pill.action {
+  background: #141b26;
+  color: #ffffff;
+}
+
+/* Roblox Mode Cards Row */
+.mode-cards-row {
+  display: flex;
+  gap: 14px;
+}
+
+.cartoon-panel {
+  width: 90%;
+  max-width: 500px;
+  margin: auto;
+  background: linear-gradient(180deg, #1c293f 0%, #121c2b 100%);
+  border: 4px solid #0a101a;
+  border-radius: 32px;
+  padding: 34px 38px;
+  box-shadow: 
+    0 18px 0 #06090f,
+    0 30px 60px rgba(0, 0, 0, 0.8),
+    inset 0 4px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  position: relative;
+  animation: cartoonBounce 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.3);
+  color: #ffffff;
+}
+
+.roblox-card {
+  width: 140px;
+  height: 150px;
+  background: #0d121a;
+  border: 3px solid #000000;
+  border-radius: 22px;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  transition: all 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  color: #ffffff;
+}
+
+.roblox-card:hover {
+  transform: translateY(-6px) scale(1.04);
+  background: #161e2b;
+  border-color: #ffffff;
+}
+
+.roblox-card.active {
+  background: #1a2536;
+  border-color: #00e5ff;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.5), 0 10px 24px rgba(0, 0, 0, 0.7);
+}
+
+.card-tag {
+  font-size: 10px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.card-tag.tournament {
+  color: #ff3366;
+}
+
+.card-title {
+  font-size: 38px;
+  font-weight: 900;
+  margin: 2px 0;
+  letter-spacing: 1px;
+  text-shadow: 2px 2px 0 #000000;
+}
+
+.card-sub {
+  font-size: 11px;
+  font-weight: 900;
+  color: #00e5ff;
+  letter-spacing: 1px;
+}
+
+.card-count {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Big Kickoff Button */
+.btn-roblox-kickoff {
+  background: linear-gradient(180deg, #ff3366, #d90429);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  padding: 14px 44px;
+  border-radius: 26px;
+  border: 3px solid #000000;
+  box-shadow: 0 6px 0 #800016, 0 12px 24px rgba(255, 51, 102, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-roblox-kickoff:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 9px 0 #800016, 0 16px 30px rgba(255, 51, 102, 0.6);
+}
+
+.btn-roblox-kickoff:active {
+  transform: translateY(3px);
+  box-shadow: 0 3px 0 #800016;
+}
+
+/* Left Circle Buttons Bar */
+.roblox-left-bar {
+  position: absolute;
+  left: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.side-circle-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2.5px solid #000000;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease;
+}
+
+.side-circle-btn:hover {
+  transform: scale(1.12);
+}
+
+.side-circle-btn.vip { background: #ffaa00; }
+.side-circle-btn.reels { background: #ff3366; }
+
+.juicy-btn .btn-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.4));
+  transition: transform 0.2s ease;
+}
+
+.juicy-btn:hover .btn-icon {
+  transform: scale(1.25) rotate(-6deg);
+}
+
+/* Internal Shine Overlay */
+.juicy-btn::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 18px 18px 0 0;
+  pointer-events: none;
+}
+
+/* Button Color Variants */
+.btn-play {
+  background: linear-gradient(180deg, #34e879 0%, #15b34e 100%);
+  color: #03240d;
+  box-shadow: 
+    0 9px 0 #0d6e30,
+    0 16px 32px rgba(0, 0, 0, 0.6);
+}
+.btn-play:hover {
+  background: linear-gradient(180deg, #42f587 0%, #17c757 100%);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 13px 0 #0d6e30,
+    0 22px 40px rgba(52, 232, 121, 0.45);
+}
+.btn-play:active {
+  transform: translateY(5px) scale(0.99);
+  box-shadow: 0 4px 0 #0d6e30;
+}
+
+.btn-locker {
+  background: linear-gradient(180deg, #ffcc00 0%, #e69d00 100%);
+  color: #331e00;
+  box-shadow: 
+    0 9px 0 #8f6200,
+    0 16px 32px rgba(0, 0, 0, 0.6);
+}
+.btn-locker:hover {
+  background: linear-gradient(180deg, #ffd733 0%, #faa900 100%);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 13px 0 #8f6200,
+    0 22px 40px rgba(255, 204, 0, 0.45);
+}
+.btn-locker:active {
+  transform: translateY(5px) scale(0.99);
+  box-shadow: 0 4px 0 #8f6200;
+}
+
+.btn-settings {
+  background: linear-gradient(180deg, #00d9ff 0%, #0088ff 100%);
+  color: #001f3f;
+  box-shadow: 
+    0 9px 0 #0055b3,
+    0 16px 32px rgba(0, 0, 0, 0.6);
+}
+.btn-settings:hover {
+  background: linear-gradient(180deg, #33e2ff 0%, #1a94ff 100%);
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 13px 0 #0055b3,
+    0 22px 40px rgba(0, 217, 255, 0.45);
+}
+.btn-settings:active {
+  transform: translateY(5px) scale(0.99);
+  box-shadow: 0 4px 0 #0055b3;
+}
+
+/* Button Color Schemes */
+.btn-green {
+  background: linear-gradient(180deg, #28e070, #1ab854);
+  color: #062b12;
+  box-shadow: 0 7px 0 #0f7533, 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+.btn-green:hover {
+  background: linear-gradient(180deg, #32f07d, #1ec45b);
+  transform: translateY(-2px);
+  box-shadow: 0 9px 0 #0f7533, 0 14px 24px rgba(0, 0, 0, 0.4);
+}
+.btn-green:active {
+  transform: translateY(4px);
+  box-shadow: 0 3px 0 #0f7533;
+}
+
+.btn-yellow {
+  background: linear-gradient(180deg, #ffcc00, #e6b000);
+  color: #332400;
+  box-shadow: 0 7px 0 #997500, 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+.btn-yellow:hover {
+  background: linear-gradient(180deg, #ffdd33, #f5bd00);
+  transform: translateY(-2px);
+  box-shadow: 0 9px 0 #997500, 0 14px 24px rgba(0, 0, 0, 0.4);
+}
+.btn-yellow:active {
+  transform: translateY(4px);
+  box-shadow: 0 3px 0 #997500;
+}
+
+.btn-blue {
+  background: linear-gradient(180deg, #00d5ff, #0099ff);
+  color: #002244;
+  box-shadow: 0 7px 0 #0066cc, 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+.btn-blue:hover {
+  background: linear-gradient(180deg, #33e0ff, #1aa3ff);
+  transform: translateY(-2px);
+  box-shadow: 0 9px 0 #0066cc, 0 14px 24px rgba(0, 0, 0, 0.4);
+}
+.btn-blue:active {
+  transform: translateY(4px);
+  box-shadow: 0 3px 0 #0066cc;
+}
+
+.btn-red {
+  background: linear-gradient(180deg, #ff4d6d, #d90429);
+  color: #ffffff;
+  box-shadow: 0 7px 0 #8d021f, 0 10px 20px rgba(0, 0, 0, 0.35);
+}
+.btn-red:hover {
+  background: linear-gradient(180deg, #ff6685, #ef1a3f);
+  transform: translateY(-2px);
+  box-shadow: 0 9px 0 #8d021f, 0 14px 24px rgba(0, 0, 0, 0.4);
+}
+.btn-red:active {
+  transform: translateY(4px);
+  box-shadow: 0 3px 0 #8d021f;
+}
+
+.btn-icon {
+  font-size: 22px;
+}
+
+/* Top Bar Submenus */
+.panel-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 14px;
+}
+
+.panel-top-bar h2 {
+  font-size: 18px;
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: 1.5px;
+  color: #ffaa00;
+}
+
+.cartoon-btn-back {
+  background: #243044;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 2px solid #0d1420;
+  box-shadow: 0 3px 0 #0d1420;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cartoon-btn-back:hover {
+  background: #334460;
+  transform: translateY(-1px);
+}
+
+.cartoon-btn-back:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #0d1420;
+}
+
+/* Cartoon Game Mode Grid */
+.cartoon-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.cartoon-mode-card {
+  background: #202b3d;
+  border: 3px solid #0d1420;
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 5px 0 #0d1420;
+  transition: all 0.15s ease;
+  color: #ffffff;
+}
+
+.cartoon-mode-card:hover {
+  background: #2b3950;
+  transform: translateY(-2px);
+}
+
+.cartoon-mode-card.selected {
+  background: #2b3d5c;
+  border-color: #00e5ff;
+  box-shadow: 0 5px 0 #0088cc, 0 0 16px rgba(0, 229, 255, 0.4);
+}
+
+.card-badge {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: #ffaa00;
+  color: #000;
+  border: 2px solid #0d1420;
+}
+.card-badge.2p { background: #ff4d6d; color: #fff; }
+.card-badge.practice { background: #00e5ff; color: #000; }
+.card-badge.cup { background: #9b51e0; color: #fff; }
+
+.card-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+
+.cartoon-mode-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.cartoon-mode-card p {
+  margin: 4px 0 0 0;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Ball Locker Preview & Selection */
+.cartoon-ball-preview {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+#ball-main-preview {
+  width: 84px;
+  height: 84px;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.5));
+  animation: floatBall 2s ease-in-out infinite alternate;
+}
+
+@keyframes floatBall {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-8px); }
+}
+
+.cartoon-ball-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.cartoon-ball-card {
+  background: #202b3d;
+  border: 3px solid #0d1420;
+  border-radius: 14px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #0d1420;
+  transition: all 0.15s ease;
+  color: #fff;
+}
+
+.cartoon-ball-card img {
+  width: 36px;
+  height: 36px;
+}
+
+.cartoon-ball-card span {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+
+.cartoon-ball-card:hover {
+  background: #2b3950;
+  transform: translateY(-2px);
+}
+
+.cartoon-ball-card.selected {
+  background: #00e5ff;
+  border-color: #0d1420;
+  box-shadow: 0 4px 0 #0088cc;
+  color: #080c14;
+}
+
+/* Settings Submenu Stack */
+.cartoon-settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-row label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cartoon-pills {
+  display: flex;
+  gap: 8px;
+  background: #101724;
+  padding: 6px;
+  border-radius: 14px;
+  border: 2px solid #0d1420;
+}
+
+.cartoon-pills button {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cartoon-pills button.selected {
+  background: #ffaa00;
+  color: #1a1000;
+  box-shadow: 0 3px 0 #cc8800;
+}
+
+/* Victory Screen */
+.victory-header h1 {
+  font-size: 32px;
+  font-weight: 900;
+  text-align: center;
+  margin: 0;
+  text-shadow: 2px 2px 0 #000;
+}
+.blue-win h1 { color: #4da3ff; }
+.red-win h1 { color: #ff5b6e; }
+/* Inventory Tabs Navigation */
+.inventory-tabs {
+  display: flex;
+  gap: 8px;
+  background: #0f141c;
+  padding: 4px;
+  border-radius: 18px;
+  border: 2px solid #000000;
+}
+
+.inv-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 8px 0;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.inv-tab.active {
+  background: #00e5ff;
+  color: #080c14;
+  box-shadow: 0 3px 0 #0088cc;
+}
+
+.inv-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Disc Live Preview Circle */
+.disc-live-preview-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: #0a0f18;
+  padding: 16px;
+  border-radius: 20px;
+  border: 2.5px solid #000000;
+}
+
+.disc-preview-circle {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 5px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.6);
+  font-size: 20px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #000000;
+  transition: all 0.2s ease;
+}
+
+.preview-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Option Groups & Color Swatches */
+.disc-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.option-group label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffaa00;
+}
+
+.color-palette {
+  display: flex;
+  gap: 8px;
+}
+
+.color-swatch {
+  flex: 1;
+  height: 34px;
+  border-radius: 10px;
+  border: 2px solid #000000;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffffff;
+  background: #4da3ff;
+  box-shadow: 0 3px 0 #000000;
+  transition: transform 0.15s ease;
+}
+
+.color-swatch:hover {
+  transform: translateY(-2px);
+}
+
+.color-swatch.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 3px 0 #000000;
+}
+
+/* Number Input & Emoji Grid */
+.number-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#input-jersey-num {
+  width: 70px;
+  background: #0f141c;
+  border: 2px solid #000000;
+  border-radius: 10px;
+  padding: 6px 10px;
+  color: #00e5ff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.number-input-row .hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.emoji-opt {
+  background: #0f141c;
+  border: 2px solid #000000;
+  border-radius: 10px;
+  padding: 6px 4px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #000000;
+  transition: all 0.15s ease;
+}
+
+.emoji-opt:hover {
+  background: #1a2332;
+}
+
+/* ==========================================================================
+   ROBLOX FOOTBALL 3-PANEL INVENTORY MODAL STYLING
+   ========================================================================== */
+.roblox-inv-modal {
+  width: 820px;
+  height: 520px;
+  background: #121820;
+  border-radius: 20px;
+  border: 3px solid #1a222e;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+  display: flex;
+  padding: 16px;
+  gap: 12px;
+  position: relative;
+  font-family: 'Outfit', sans-serif;
+  color: #ffffff;
+  animation: cartoonBounce 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.25);
+}
+
+.roblox-close-x {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+  z-index: 10;
+  transition: color 0.15s ease;
+}
+
+.roblox-close-x:hover {
+  color: #ff3344;
+}
+
+/* Panel 1: Left Nav Column */
+.roblox-inv-left-col {
+  width: 170px;
+  background: #0b0f16;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.collection-box {
+  background: #141b26;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.collection-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+}
+
+.collection-count {
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.collection-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.collection-progress-fill {
+  height: 100%;
+  background: #ffaa00;
+}
+
+.roblox-shop-btn {
+  width: 100%;
+  background: #0f141d;
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.roblox-shop-btn:hover {
+  background: #1a2230;
+}
+
+.cat-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.cat-nav-item {
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  padding: 7px 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cat-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.cat-nav-item.active {
+  background: #ff2d6c;
+  color: #ffffff;
+}
+
+.cat-count {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* Panel 2: Center Catalog Grid */
+.roblox-inv-center-col {
+  flex: 1;
+  background: #0a0d14;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.catalog-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cat-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.header-count {
+  color: #ff2d6c;
+  font-size: 10px;
+}
+
+.pattern-items-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.pattern-item-card {
+  background: #111722;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pattern-item-card:hover {
+  background: #182130;
+  transform: translateY(-2px);
+}
+
+.pattern-item-card.selected {
+  border-color: #00e5ff;
+  background: #18273c;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+}
+
+.item-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2.5px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffffff;
+  margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.item-circle.classic { background: #222222; }
+.item-circle.pattern-rings { background: radial-gradient(circle, #222 30%, #ff2d6c 31%, #ff2d6c 60%, #222 61%); }
+.item-circle.pattern-halves { background: linear-gradient(90deg, #ff2d6c 50%, #222222 50%); }
+.item-circle.pattern-checker { background: repeating-conic-gradient(#222 0% 25%, #ff2d6c 0% 50%) 50% / 20px 20px; }
+.item-circle.pattern-stripes { background: repeating-linear-gradient(90deg, #222, #222 8px, #00e5ff 8px, #00e5ff 16px); }
+.item-circle.pattern-sash { background: linear-gradient(135deg, #222 40%, #ffaa00 40%, #ffaa00 60%, #222 60%); }
+.item-circle.pattern-diamond { background: radial-gradient(circle, #ffaa00 40%, #222 41%); }
+.item-circle.pattern-spain { background: linear-gradient(180deg, #aa151b 25%, #f1bf00 25%, #f1bf00 75%, #aa151b 75%); }
+
+.item-title {
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.item-sub {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.item-sub.pink {
+  color: #ff2d6c;
+}
+
+.item-status {
+  font-size: 9px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.item-price {
+  font-size: 9px;
+  font-weight: 900;
+  color: #ffffff;
+  margin-top: 2px;
+}
+
+/* Panel 3: Right Preview Column */
+.roblox-inv-right-col {
+  width: 210px;
+  background: #0b0f16;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.preview-large-box {
+  width: 100%;
+  aspect-ratio: 1;
+  background: #07090e;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.large-disc-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 6px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #000000;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.7);
+  position: relative;
+  overflow: hidden;
+}
+
+.large-disc-preview.pattern-spain { background: linear-gradient(180deg, #aa151b 25%, #f1bf00 25%, #f1bf00 75%, #aa151b 75%); }
+.large-disc-preview.pattern-classic { background: #222222; }
+.large-disc-preview.pattern-halves { background: linear-gradient(90deg, #ff2d6c 50%, #111111 50%); }
+.large-disc-preview.pattern-checker { background: repeating-conic-gradient(#111 0% 25%, #4da3ff 0% 50%) 50% / 40px 40px; }
+.large-disc-preview.pattern-stripes { background: repeating-linear-gradient(90deg, #111, #111 15px, #00e5ff 15px, #00e5ff 30px); }
+.large-disc-preview.pattern-rings { background: radial-gradient(circle, #111 30%, #ff2d6c 31%, #ff2d6c 60%, #111 61%); }
+.large-disc-preview.pattern-sash { background: linear-gradient(135deg, #111 40%, #ffaa00 40%, #ffaa00 60%, #111 60%); }
+.large-disc-preview.pattern-diamond { background: radial-gradient(circle, #ffaa00 40%, #111 41%); }
+
+.number-spinner-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: #141b26;
+  border-radius: 12px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.spinner-arrow {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 20px;
+  font-weight: 900;
+  cursor: pointer;
+  padding: 2px 10px;
+
+  transition: color 0.15s ease;
+}
+
+.spinner-arrow:hover {
+  color: #ffffff;
+}
+
+.spinner-val {
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.right-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.roblox-btn-preview {
+  width: 100%;
+  background: #252e3e;
+  border: none;
+  border-radius: 12px;
+  padding: 10px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.roblox-btn-preview:hover {
+  background: #323e54;
+}
+
+.roblox-btn-equip {
+  width: 100%;
+  background: #ff2d6c;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 45, 108, 0.4);
+  transition: all 0.15s ease;
+}
+
+.roblox-btn-equip:hover {
+  background: #ff477e;
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   GOAL EMOTE CELEBRATION ANIMATIONS
+   ========================================================================== */
+.emote-siuuu {
+  animation: emoteSiuuu 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes emoteSiuuu {
+  0% { transform: scale(1) translateY(0) rotate(0deg); }
+  30% { transform: scale(1.3) translateY(-40px) rotate(-15deg); }
+  60% { transform: scale(1.4) translateY(-45px) rotate(180deg); }
+  85% { transform: scale(1.1) translateY(0) rotate(360deg); }
+  100% { transform: scale(1) translateY(0) rotate(360deg); }
+}
+
+.emote-griddly {
+  animation: emoteGriddly 0.8s ease-in-out;
+}
+
+@keyframes emoteGriddly {
+  0% { transform: translateX(0) rotate(0deg); }
+  15% { transform: translateX(-14px) rotate(-12deg) translateY(-8px); }
+  30% { transform: translateX(14px) rotate(12deg) translateY(0px); }
+  45% { transform: translateX(-14px) rotate(-12deg) translateY(-8px); }
+  60% { transform: translateX(14px) rotate(12deg) translateY(0px); }
+  75% { transform: translateX(-8px) rotate(-6deg); }
+  100% { transform: translateX(0) rotate(0deg); }
+}
+
+.emote-robot {
+  animation: emoteRobot 0.75s steps(8, end);
+}
+
+@keyframes emoteRobot {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.1); }
+  50% { transform: rotate(180deg) scale(0.95); }
+  75% { transform: rotate(270deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.emote-slide {
+  animation: emoteSlide 0.7s ease-out;
+}
+
+@keyframes emoteSlide {
+  0% { transform: scale(1) translateY(0) skewX(0deg); }
+  40% { transform: scale(1.2, 0.7) translateY(20px) skewX(-25deg); }
+  70% { transform: scale(1.1, 0.85) translateY(10px) skewX(-10deg); }
+  100% { transform: scale(1) translateY(0) skewX(0deg); }
+}
+
+.emote-flip {
+  animation: emoteFlip 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes emoteFlip {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  50% { transform: translateY(-50px) rotate(-360deg) scale(1.25); }
+  100% { transform: translateY(0) rotate(-720deg) scale(1); }
+}
+
+.emote-dance {
+  animation: emoteDance 0.85s ease-in-out infinite alternate;
+}
+
+@keyframes emoteDance {
+  0% { transform: scale(1) rotate(-15deg); }
+  25% { transform: scale(1.2) rotate(15deg) translateY(-10px); }
+  50% { transform: scale(0.9) rotate(-20deg) translateY(5px); }
+  75% { transform: scale(1.25) rotate(20deg) translateY(-12px); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+/* ==========================================================================
+   VICTORY & PAUSE MODAL STYLING
+   ========================================================================== */
+.victory-modal-card {
+  width: 440px;
+  height: auto;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 24px;
+  gap: 20px;
+}
+
+.victory-banner-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.victory-trophy-icon {
+  font-size: 48px;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.5));
+  animation: floatBall 1.8s ease-in-out infinite alternate;
+}
+
+.victory-title-text {
+  font-size: 26px;
+  font-weight: 900;
+  margin: 0;
+  letter-spacing: 1px;
+  text-align: center;
+  text-shadow: 2px 2px 0 #000000;
+}
+
+.blue-win .victory-title-text { color: #4da3ff; }
+.red-win .victory-title-text { color: #ff5b6e; }
+.draw-win .victory-title-text { color: #ffaa00; }
+
+.victory-sub-text {
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 1.5px;
+}
+
+.victory-scoreboard-box {
+  width: 100%;
+  background: #0b0f16;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+}
+
+.victory-team-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.victory-team-badge .team-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.victory-team-badge.blue .team-label { color: #4da3ff; }
+.victory-team-badge.red .team-label { color: #ff5b6e; }
+
+.team-score-num {
+  font-size: 44px;
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #000000;
+}
+
+.victory-vs-divider {
+  font-size: 14px;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.victory-actions-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-rematch {
+  width: 100%;
+  text-align: center;
+  padding: 14px 0;
+}
+
+.btn-menu-return {
+  padding: 12px 0;
+}
+
+/* Pause Modal */
+.pause-modal-card {
+  width: 360px;
+  height: auto;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 24px;
+  gap: 22px;
+}
+
+.pause-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pause-icon {
+  font-size: 40px;
+}
+
+.pause-title {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  margin: 0;
+  color: #00e5ff;
+}
+
+.pause-actions-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-resume {
+  width: 100%;
+  text-align: center;
+}
+
+.btn-quit-menu {
+  padding: 12px 0;
+}
+
+/* Settings Modal Dark Roblox Theme */
+.settings-modal-card {
+  width: 520px;
+  height: auto;
+  flex-direction: column;
+  padding: 24px;
+  gap: 20px;
+}
+
+.roblox-inv-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.roblox-inv-title {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.roblox-back-btn {
+  background: #182232;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  color: #38bdf8;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.roblox-back-btn:hover {
+  background: #243248;
+  color: #ffffff;
+  border-color: #38bdf8;
+  transform: translateX(-3px);
+}
+
+.settings-content-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.setting-group-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(10, 16, 26, 0.7);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.setting-group-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #38bdf8;
+}
+
+.setting-options-row {
+  display: flex;
+  gap: 8px;
+}
+
+.setting-opt-btn {
+  flex: 1;
+  background: #162030;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 10px 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.setting-opt-btn:hover {
+  background: #202d44;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.setting-opt-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.settings-bottom-actions {
+  width: 100%;
+}
+
+.btn-save-modal,
+.btn-green-action {
+  width: 100%;
+  text-align: center;
+  padding: 14px 0;
+  background: linear-gradient(180deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  border-radius: 22px;
+  border: 2.5px solid #000000 !important;
+  box-shadow: 0 5px 0 #046c4e, 0 10px 24px rgba(16, 185, 129, 0.45) !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-save-modal:hover,
+.btn-green-action:hover {
+  transform: translateY(-2px) scale(1.02);
+  background: linear-gradient(180deg, #34d399, #10b981) !important;
+  box-shadow: 0 7px 0 #046c4e, 0 14px 28px rgba(16, 185, 129, 0.6) !important;
+}
+
+.btn-save-modal:active,
+.btn-green-action:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #046c4e !important;
+}
