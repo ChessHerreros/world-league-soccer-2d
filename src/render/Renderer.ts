@@ -861,11 +861,13 @@ export class Renderer {
     ctx.restore();
 
     // 3 small solid white circles aim-indicator projecting outwards from the front of the ball (Local Human player ONLY)
-    const showKickDirection = isLocalPlayer && isInteractive;
+    // Only display when the local player is actually touching the ball
+    const dx = ball.position.x - player.position.x;
+    const dy = ball.position.y - player.position.y;
+    const len = Math.hypot(dx, dy);
+    const isTouchingBall = len <= (player.radius + ball.radius + 5);
+    const showKickDirection = isLocalPlayer && isInteractive && isTouchingBall;
     if (showKickDirection) {
-      const dx = ball.position.x - player.position.x;
-      const dy = ball.position.y - player.position.y;
-      const len = Math.hypot(dx, dy);
       const dirX = len > 0.0001 ? dx / len : 1;
       const dirY = len > 0.0001 ? dy / len : 0;
 

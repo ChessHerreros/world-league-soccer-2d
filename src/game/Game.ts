@@ -649,7 +649,7 @@ export class Game {
       const nearBall = distToBall <= p1.kickRadius;
       const inDribbleRange = distToBall <= p1.kickRadius + 26;
 
-      p1.isKicking = isSpaceDown || p1.kickFlash > 0;
+      p1.isKicking = (isSpaceDown && nearBall) || p1.kickFlash > 0;
       p1.updateCharge(dt, nearBall, isSpaceDown);
 
       // Local power glow responsiveness (takes highest between local charge and server state)
@@ -842,7 +842,7 @@ export class Game {
       this.performDash(p1, p1Move.x, p1Move.y);
     }
 
-    p1.isKicking = isSpaceDown || p1.kickFlash > 0;
+    p1.isKicking = (isSpaceDown && nearBall) || p1.kickFlash > 0;
     p1.updateCharge(dt, nearBall, isSpaceDown);
 
     let maxCharge = p1.chargeRatio;
