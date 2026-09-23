@@ -649,7 +649,7 @@ export class Game {
       const nearBall = distToBall <= p1.kickRadius;
       const inDribbleRange = distToBall <= p1.kickRadius + 26;
 
-      p1.isKicking = (isSpaceDown && nearBall) || p1.kickFlash > 0;
+      p1.isKicking = isSpaceDown || p1.kickFlash > 0;
       p1.updateCharge(dt, nearBall, isSpaceDown);
 
       // Local power glow responsiveness (takes highest between local charge and server state)
@@ -662,8 +662,9 @@ export class Game {
         this.sound.playKick(p1.chargeRatio);
         this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, p1.chargeRatio);
         this.renderer.addKickParticles(this.ball.position.x, this.ball.position.y, dx, dy, p1.chargeRatio, p1.team);
-      } else if (spacePressed) {
+      } else if (spacePressed && p1.canKick()) {
         p1.kick();
+        this.sound.playKick(0);
       }
 
       if (qPressed) this.lastQPressTime = performance.now();
@@ -842,7 +843,7 @@ export class Game {
       this.performDash(p1, p1Move.x, p1Move.y);
     }
 
-    p1.isKicking = (isSpaceDown && nearBall) || p1.kickFlash > 0;
+    p1.isKicking = isSpaceDown || p1.kickFlash > 0;
     p1.updateCharge(dt, nearBall, isSpaceDown);
 
     let maxCharge = p1.chargeRatio;
@@ -948,6 +949,8 @@ export class Game {
     if (distance > player.kickRadius) {
       player.resetCharge();
       this.ball.chargeRatio = 0;
+      player.kick();
+      this.sound.playKick(0);
       return;
     }
 

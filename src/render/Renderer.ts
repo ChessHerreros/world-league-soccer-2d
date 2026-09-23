@@ -865,7 +865,7 @@ export class Renderer {
     const dx = ball.position.x - player.position.x;
     const dy = ball.position.y - player.position.y;
     const len = Math.hypot(dx, dy);
-    const isTouchingBall = len <= (player.radius + ball.radius + 5);
+    const isTouchingBall = len <= (player.radius + ball.radius + 3);
     const showKickDirection = isLocalPlayer && isInteractive && isTouchingBall;
     if (showKickDirection) {
       const dirX = len > 0.0001 ? dx / len : 1;
