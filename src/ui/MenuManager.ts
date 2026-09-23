@@ -735,10 +735,10 @@ export class MenuManager {
             ` : `
               <div class="setting-group-box">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span class="setting-group-title">MAPEO DE TECLAS (JUGADOR / ONLINE)</span>
+                  <span class="setting-group-title">MAPEO DE CONTROLES (TECLADO Y RATÓN)</span>
                   <button id="btn-reset-keybinds" class="btn-reset-controls-link">🔄 RESTABLECER</button>
                 </div>
-                <p style="color: #94a3b8; font-size: 0.85rem; margin: 2px 0 8px 0;">Haz clic en cualquier tecla para reasignarla a tu gusto.</p>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin: 2px 0 8px 0;">Haz clic y pulsa cualquier tecla, botón del ratón (Clics, Mouse 4/5) o ruedecilla.</p>
                 <div class="keymap-cards-container">
                   ${actionsList}
                 </div>
@@ -814,26 +814,63 @@ export class MenuManager {
             listeningAction = action;
             render();
 
-            // Set up one-shot capture
+            const finishCapture = (capturedKey: string | null) => {
+              if (removeKeyCapture) {
+                removeKeyCapture();
+                removeKeyCapture = null;
+              }
+              if (capturedKey && capturedKey !== "escape") {
+                currentBindings[action] = capturedKey;
+                saveKeyBindings(currentBindings);
+              }
+              listeningAction = null;
+              this.sound.playButtonClick();
+              render();
+            };
+
+            // Keyboard listener
             const onKeyDown = (keyEvent: KeyboardEvent) => {
               keyEvent.preventDefault();
               keyEvent.stopPropagation();
               const newKey = keyEvent.key.toLowerCase();
-
-              if (newKey !== "escape") {
-                currentBindings[action] = newKey;
-                saveKeyBindings(currentBindings);
-              }
-
-              listeningAction = null;
-              this.sound.playButtonClick();
-              window.removeEventListener("keydown", onKeyDown, true);
-              removeKeyCapture = null;
-              render();
+              finishCapture(newKey);
             };
 
-            window.addEventListener("keydown", onKeyDown, true);
-            removeKeyCapture = () => window.removeEventListener("keydown", onKeyDown, true);
+            // Mouse button listener (supports M1, M2, M3, Mouse 4, Mouse 5, etc.)
+            const onMouseDown = (mouseEvent: MouseEvent) => {
+              mouseEvent.preventDefault();
+              mouseEvent.stopPropagation();
+              const newKey = "mouse" + mouseEvent.button;
+              finishCapture(newKey);
+            };
+
+            // Mouse wheel listener (supports WheelUp, WheelDown)
+            const onWheel = (wheelEvent: WheelEvent) => {
+              wheelEvent.preventDefault();
+              wheelEvent.stopPropagation();
+              const newKey = wheelEvent.deltaY < 0 ? "wheelup" : "wheeldown";
+              finishCapture(newKey);
+            };
+
+            const onContextMenu = (menuEvent: MouseEvent) => {
+              menuEvent.preventDefault();
+            };
+
+            // Attach after a short delay so the trigger click itself isn't immediately captured
+            const timer = setTimeout(() => {
+              window.addEventListener("keydown", onKeyDown, true);
+              window.addEventListener("mousedown", onMouseDown, true);
+              window.addEventListener("wheel", onWheel, { capture: true, passive: false });
+              window.addEventListener("contextmenu", onContextMenu, true);
+            }, 60);
+
+            removeKeyCapture = () => {
+              clearTimeout(timer);
+              window.removeEventListener("keydown", onKeyDown, true);
+              window.removeEventListener("mousedown", onMouseDown, true);
+              window.removeEventListener("wheel", onWheel, true);
+              window.removeEventListener("contextmenu", onContextMenu, true);
+            };
           });
         });
       }

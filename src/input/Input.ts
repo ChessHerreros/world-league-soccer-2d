@@ -47,6 +47,55 @@ export class Input {
       this.keys.delete(key);
       this.released.add(key);
     });
+
+    // Mouse button listeners (M1, M2, M3, Mouse 4, Mouse 5)
+    window.addEventListener("mousedown", (e) => {
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.closest("#menu-overlay")) return;
+
+      const mouseKey = "mouse" + e.button;
+      if (!this.keys.has(mouseKey)) this.pressed.add(mouseKey);
+      this.keys.add(mouseKey);
+
+      // Prevent browser default on right click or lateral buttons (mouse 4 / 5)
+      if (e.button === 2 || e.button === 3 || e.button === 4) {
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      const mouseKey = "mouse" + e.button;
+      this.keys.delete(mouseKey);
+      this.released.add(mouseKey);
+    });
+
+    // Mouse wheel impulse listener (WheelUp / WheelDown)
+    window.addEventListener("wheel", (e) => {
+      const target = e.target as HTMLElement;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.closest("#menu-overlay")) return;
+
+      const wheelKey = e.deltaY < 0 ? "wheelup" : "wheeldown";
+      if (!this.keys.has(wheelKey)) this.pressed.add(wheelKey);
+      this.keys.add(wheelKey);
+
+      setTimeout(() => {
+        this.keys.delete(wheelKey);
+        this.released.add(wheelKey);
+      }, 70);
+
+      const mappedKeys = Object.values(this.bindings);
+      if (mappedKeys.includes(wheelKey)) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    // Prevent context menu during gameplay or if right click is mapped
+    window.addEventListener("contextmenu", (e) => {
+      const target = e.target as HTMLElement;
+      if (target?.closest("#game") || Object.values(this.bindings).includes("mouse2")) {
+        e.preventDefault();
+      }
+    });
   }
 
   getBindings(): KeyBindings {

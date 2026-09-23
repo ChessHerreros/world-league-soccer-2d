@@ -76,5 +76,15 @@ export function formatKeyDisplay(key: string): string {
   if (k === "arrowright") return "→ DER";
   if (k === "backspace") return "BORRAR";
   if (k === "delete") return "SUPR";
+
+  // Botones de Ratón / Mouse
+  if (k === "mouse0") return "CLIC IZQ (M1)";
+  if (k === "mouse1") return "RUEDA CLIC (M3)";
+  if (k === "mouse2") return "CLIC DER (M2)";
+  if (k === "mouse3") return "MOUSE 4 (ATRÁS)";
+  if (k === "mouse4") return "MOUSE 5 (ADELANTE)";
+  if (k === "wheelup") return "RUEDA ARRIBA";
+  if (k === "wheeldown") return "RUEDA ABAJO";
+
   return key.toUpperCase();
 }
