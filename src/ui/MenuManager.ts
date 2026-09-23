@@ -1,4 +1,12 @@
 import { SoundEffects } from "../audio/SoundEffects";
+import {
+  KeyBindings,
+  DEFAULT_KEYBINDINGS,
+  ACTION_DETAILS,
+  loadKeyBindings,
+  saveKeyBindings,
+  formatKeyDisplay,
+} from "../input/KeyBindings";
 
 export type GameMode = "VS_AI" | "LOCAL_2P" | "PRACTICE" | "TOURNAMENT" | "ONLINE";
 
@@ -650,64 +658,195 @@ export class MenuManager {
     });
   }
 
-  showSettingsSubmenu(): void {
+  showSettingsSubmenu(initialTab: "controls" | "rules" = "controls"): void {
     this.overlay.style.display = "flex";
-    this.overlay.innerHTML = `
-      <div class="roblox-inv-modal settings-modal-card">
-        <div class="roblox-inv-header">
-          <button id="btn-back" class="roblox-back-btn">⬅ VOLVER</button>
-          <h2 class="roblox-inv-title">⚙️ AJUSTES DE PARTIDA</h2>
-        </div>
+    let activeTab = initialTab;
+    const currentBindings: KeyBindings = loadKeyBindings();
+    let listeningAction: keyof KeyBindings | null = null;
+    let removeKeyCapture: (() => void) | null = null;
 
-        <div class="settings-content-stack">
-          <div class="setting-group-box">
-            <span class="setting-group-title">⏱ DURACIÓN DEL PARTIDO</span>
-            <div class="setting-options-row" id="time-pills">
-              <button class="setting-opt-btn ${this.duration === 90 ? "active" : ""}" data-val="90">1:30 MIN</button>
-              <button class="setting-opt-btn ${this.duration === 180 ? "active" : ""}" data-val="180">3:00 MIN</button>
-              <button class="setting-opt-btn ${this.duration === 300 ? "active" : ""}" data-val="300">5:00 MIN</button>
-              <button class="setting-opt-btn ${this.duration === 0 ? "active" : ""}" data-val="0">SIN TIEMPO</button>
+    const render = () => {
+      // Clean up any pending key capture listener
+      if (removeKeyCapture) {
+        removeKeyCapture();
+        removeKeyCapture = null;
+      }
+
+      const actionsList = (Object.keys(DEFAULT_KEYBINDINGS) as Array<keyof KeyBindings>).map((action) => {
+        const details = ACTION_DETAILS[action];
+        const key = currentBindings[action];
+        const isListening = listeningAction === action;
+        const displayKey = isListening ? "PULSA UNA TECLA..." : formatKeyDisplay(key);
+
+        return `
+          <div class="keymap-row-card ${isListening ? "listening" : ""}">
+            <div class="keymap-info">
+              <span class="keymap-icon">${details.icon}</span>
+              <div class="keymap-text-col">
+                <span class="keymap-label">${details.label}</span>
+                <span class="keymap-desc">${details.desc}</span>
+              </div>
             </div>
+            <button class="keymap-assign-btn ${isListening ? "active-listening" : ""}" data-action="${action}">
+              ${displayKey}
+            </button>
+          </div>
+        `;
+      }).join("");
+
+      this.overlay.innerHTML = `
+        <div class="roblox-inv-modal settings-modal-card">
+          <div class="roblox-inv-header">
+            <button id="btn-back" class="roblox-back-btn">⬅ VOLVER</button>
+            <h2 class="roblox-inv-title">⚙️ AJUSTES</h2>
           </div>
 
-          <div class="setting-group-box">
-            <span class="setting-group-title">⚽ LÍMITE DE GOLES</span>
-            <div class="setting-options-row" id="goal-pills">
-              <button class="setting-opt-btn ${this.goalLimit === 3 ? "active" : ""}" data-val="3">3 GOLES</button>
-              <button class="setting-opt-btn ${this.goalLimit === 5 ? "active" : ""}" data-val="5">5 GOLES</button>
-              <button class="setting-opt-btn ${this.goalLimit === 10 ? "active" : ""}" data-val="10">10 GOLES</button>
-              <button class="setting-opt-btn ${this.goalLimit === 0 ? "active" : ""}" data-val="0">LIBRE</button>
-            </div>
+          <!-- Settings Tabs -->
+          <div class="settings-tabs-header">
+            <button class="settings-tab-btn ${activeTab === "controls" ? "active" : ""}" id="tab-controls">
+              🎮 CONTROLES
+            </button>
+            <button class="settings-tab-btn ${activeTab === "rules" ? "active" : ""}" id="tab-rules">
+              ⏱️ REGLAS
+            </button>
+          </div>
+
+          <div class="settings-content-stack" style="max-height: 440px; overflow-y: auto; padding-right: 4px;">
+            ${activeTab === "rules" ? `
+              <div class="setting-group-box">
+                <span class="setting-group-title">⏱ DURACIÓN DEL PARTIDO</span>
+                <div class="setting-options-row" id="time-pills">
+                  <button class="setting-opt-btn ${this.duration === 90 ? "active" : ""}" data-val="90">1:30 MIN</button>
+                  <button class="setting-opt-btn ${this.duration === 180 ? "active" : ""}" data-val="180">3:00 MIN</button>
+                  <button class="setting-opt-btn ${this.duration === 300 ? "active" : ""}" data-val="300">5:00 MIN</button>
+                  <button class="setting-opt-btn ${this.duration === 0 ? "active" : ""}" data-val="0">SIN TIEMPO</button>
+                </div>
+              </div>
+
+              <div class="setting-group-box">
+                <span class="setting-group-title">⚽ LÍMITE DE GOLES</span>
+                <div class="setting-options-row" id="goal-pills">
+                  <button class="setting-opt-btn ${this.goalLimit === 3 ? "active" : ""}" data-val="3">3 GOLES</button>
+                  <button class="setting-opt-btn ${this.goalLimit === 5 ? "active" : ""}" data-val="5">5 GOLES</button>
+                  <button class="setting-opt-btn ${this.goalLimit === 10 ? "active" : ""}" data-val="10">10 GOLES</button>
+                  <button class="setting-opt-btn ${this.goalLimit === 0 ? "active" : ""}" data-val="0">LIBRE</button>
+                </div>
+              </div>
+            ` : `
+              <div class="setting-group-box">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span class="setting-group-title">MAPEO DE TECLAS (JUGADOR / ONLINE)</span>
+                  <button id="btn-reset-keybinds" class="btn-reset-controls-link">🔄 RESTABLECER</button>
+                </div>
+                <p style="color: #94a3b8; font-size: 0.85rem; margin: 2px 0 8px 0;">Haz clic en cualquier tecla para reasignarla a tu gusto.</p>
+                <div class="keymap-cards-container">
+                  ${actionsList}
+                </div>
+              </div>
+            `}
+          </div>
+
+          <div class="settings-bottom-actions">
+            <button id="btn-save-settings" class="btn-roblox-kickoff btn-save-modal">GUARDAR CAMBIOS ✔</button>
           </div>
         </div>
+      `;
 
-        <div class="settings-bottom-actions">
-          <button id="btn-save-settings" class="btn-roblox-kickoff btn-save-modal">GUARDAR CAMBIOS ✔</button>
-        </div>
-      </div>
-    `;
-
-    document.querySelector("#btn-back")?.addEventListener("click", () => this.showMainMenu());
-
-    const timeBtns = this.overlay.querySelectorAll<HTMLButtonElement>("#time-pills button");
-    timeBtns.forEach((b) => {
-      b.addEventListener("click", () => {
-        timeBtns.forEach((x) => x.classList.remove("active"));
-        b.classList.add("active");
-        this.duration = Number(b.dataset.val) as MatchDuration;
+      // Event handlers
+      document.querySelector("#btn-back")?.addEventListener("click", () => {
+        this.sound.playButtonClick();
+        if (removeKeyCapture) removeKeyCapture();
+        this.showMainMenu();
       });
-    });
 
-    const goalBtns = this.overlay.querySelectorAll<HTMLButtonElement>("#goal-pills button");
-    goalBtns.forEach((b) => {
-      b.addEventListener("click", () => {
-        goalBtns.forEach((x) => x.classList.remove("active"));
-        b.classList.add("active");
-        this.goalLimit = Number(b.dataset.val) as GoalLimit;
+      document.querySelector("#tab-controls")?.addEventListener("click", () => {
+        this.sound.playButtonClick();
+        activeTab = "controls";
+        listeningAction = null;
+        render();
       });
-    });
 
-    document.querySelector("#btn-save-settings")?.addEventListener("click", () => this.showMainMenu());
+      document.querySelector("#tab-rules")?.addEventListener("click", () => {
+        this.sound.playButtonClick();
+        activeTab = "rules";
+        listeningAction = null;
+        render();
+      });
+
+      if (activeTab === "rules") {
+        const timeBtns = this.overlay.querySelectorAll<HTMLButtonElement>("#time-pills button");
+        timeBtns.forEach((b) => {
+          b.addEventListener("click", () => {
+            this.sound.playButtonClick();
+            timeBtns.forEach((x) => x.classList.remove("active"));
+            b.classList.add("active");
+            this.duration = Number(b.dataset.val) as MatchDuration;
+          });
+        });
+
+        const goalBtns = this.overlay.querySelectorAll<HTMLButtonElement>("#goal-pills button");
+        goalBtns.forEach((b) => {
+          b.addEventListener("click", () => {
+            this.sound.playButtonClick();
+            goalBtns.forEach((x) => x.classList.remove("active"));
+            b.classList.add("active");
+            this.goalLimit = Number(b.dataset.val) as GoalLimit;
+          });
+        });
+      } else {
+        // Keybind remapping buttons
+        document.querySelector("#btn-reset-keybinds")?.addEventListener("click", () => {
+          this.sound.playButtonClick();
+          Object.assign(currentBindings, DEFAULT_KEYBINDINGS);
+          saveKeyBindings(currentBindings);
+          listeningAction = null;
+          render();
+        });
+
+        const assignBtns = this.overlay.querySelectorAll<HTMLButtonElement>(".keymap-assign-btn");
+        assignBtns.forEach((btn) => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.sound.playButtonClick();
+            const action = btn.dataset.action as keyof KeyBindings;
+            if (!action) return;
+
+            listeningAction = action;
+            render();
+
+            // Set up one-shot capture
+            const onKeyDown = (keyEvent: KeyboardEvent) => {
+              keyEvent.preventDefault();
+              keyEvent.stopPropagation();
+              const newKey = keyEvent.key.toLowerCase();
+
+              if (newKey !== "escape") {
+                currentBindings[action] = newKey;
+                saveKeyBindings(currentBindings);
+              }
+
+              listeningAction = null;
+              this.sound.playButtonClick();
+              window.removeEventListener("keydown", onKeyDown, true);
+              removeKeyCapture = null;
+              render();
+            };
+
+            window.addEventListener("keydown", onKeyDown, true);
+            removeKeyCapture = () => window.removeEventListener("keydown", onKeyDown, true);
+          });
+        });
+      }
+
+      document.querySelector("#btn-save-settings")?.addEventListener("click", () => {
+        this.sound.playButtonClick();
+        saveKeyBindings(currentBindings);
+        if (removeKeyCapture) removeKeyCapture();
+        this.showMainMenu();
+      });
+    };
+
+    render();
   }
 
   showOnlineMenu(): void {

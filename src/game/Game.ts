@@ -294,6 +294,7 @@ export class Game {
     this.matchConfig = config;
     this.isDemoMode = !!config.isDemo;
     this.isOnlineMode = !!config.isOnline;
+    this.input.reloadBindings();
     this.sound.setMuted(this.isDemoMode);
     this.ball.skinIndex = config.skinIndex;
     this.matchTimeRemaining = config.duration;
@@ -400,6 +401,9 @@ export class Game {
 
   setPaused(paused: boolean): void {
     this.isPaused = paused;
+    if (!paused) {
+      this.input.reloadBindings();
+    }
   }
 
   togglePause(): void {
@@ -613,14 +617,14 @@ export class Game {
       if (!p1) return;
 
       const p1Movement = this.input.movementP1();
-      const p1WantSprint = this.input.down("shift");
-      const isSpaceDown = this.input.down(" ");
-      const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
-      const qPressed = this.input.consumePressed("q");
-      const ePressed = this.input.consumePressed("e");
-      const qDown = this.input.down("q");
-      const eDown = this.input.down("e");
-      const cPressed = this.input.consumePressed("c");
+      const p1WantSprint = this.input.isActionDown("sprint");
+      const isSpaceDown = this.input.isActionDown("kick");
+      const spacePressed = this.input.consumeActionPressed("kick") || this.input.consumeActionReleased("kick");
+      const qPressed = this.input.consumeActionPressed("dribbleLeft");
+      const ePressed = this.input.consumeActionPressed("dribbleRight");
+      const qDown = this.input.isActionDown("dribbleLeft");
+      const eDown = this.input.isActionDown("dribbleRight");
+      const cPressed = this.input.consumeActionPressed("dash");
 
       // 1. Client-Side Direction Indicator & Prediction (0ms input latency!)
       const isMoving = Math.hypot(p1Movement.x, p1Movement.y) > 0.1;
@@ -808,13 +812,13 @@ export class Game {
     const nearBall = distToBall <= p1.kickRadius;
     const inDribbleRange = distToBall <= p1.kickRadius + 26;
 
-    const spacePressed = this.input.consumePressed(" ") || this.input.consumeReleased(" ");
-    const isSpaceDown = this.input.down(" ");
+    const spacePressed = this.input.consumeActionPressed("kick") || this.input.consumeActionReleased("kick");
+    const isSpaceDown = this.input.isActionDown("kick");
 
-    const qPressed = this.input.consumePressed("q");
-    const ePressed = this.input.consumePressed("e");
-    const qDown = this.input.down("q");
-    const eDown = this.input.down("e");
+    const qPressed = this.input.consumeActionPressed("dribbleLeft");
+    const ePressed = this.input.consumeActionPressed("dribbleRight");
+    const qDown = this.input.isActionDown("dribbleLeft");
+    const eDown = this.input.isActionDown("dribbleRight");
 
     if (qPressed) this.lastQPressTime = performance.now();
     if (ePressed) this.lastEPressTime = performance.now();
@@ -833,7 +837,7 @@ export class Game {
       this.dribble(p1, "right");
     }
 
-    if (this.input.consumePressed("c") && p1.canDash()) {
+    if (this.input.consumeActionPressed("dash") && p1.canDash()) {
       const p1Move = this.input.movementP1();
       this.performDash(p1, p1Move.x, p1Move.y);
     }

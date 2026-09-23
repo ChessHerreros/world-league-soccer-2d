@@ -1,7 +1,10 @@
+import { KeyBindings, loadKeyBindings, saveKeyBindings } from "./KeyBindings";
+
 export class Input {
   private keys = new Set<string>();
   private pressed = new Set<string>();
   private released = new Set<string>();
+  private bindings: KeyBindings = loadKeyBindings();
 
   constructor() {
     window.addEventListener("keydown", (e) => {
@@ -13,7 +16,28 @@ export class Input {
       if (!this.keys.has(key)) this.pressed.add(key);
       this.keys.add(key);
 
-      if ([" ", "shift", "arrowup", "arrowdown", "arrowleft", "arrowright", "enter", "escape"].includes(key)) {
+      // Prevent scrolling for game controls
+      if (
+        [
+          " ",
+          "shift",
+          "arrowup",
+          "arrowdown",
+          "arrowleft",
+          "arrowright",
+          "enter",
+          "escape",
+          this.bindings.up,
+          this.bindings.down,
+          this.bindings.left,
+          this.bindings.right,
+          this.bindings.kick,
+          this.bindings.sprint,
+          this.bindings.dash,
+          this.bindings.dribbleLeft,
+          this.bindings.dribbleRight,
+        ].includes(key)
+      ) {
         e.preventDefault();
       }
     });
@@ -23,6 +47,34 @@ export class Input {
       this.keys.delete(key);
       this.released.add(key);
     });
+  }
+
+  getBindings(): KeyBindings {
+    return this.bindings;
+  }
+
+  setBindings(newBindings: KeyBindings): void {
+    this.bindings = { ...newBindings };
+    saveKeyBindings(this.bindings);
+  }
+
+  reloadBindings(): void {
+    this.bindings = loadKeyBindings();
+  }
+
+  isActionDown(action: keyof KeyBindings): boolean {
+    const key = this.bindings[action];
+    return key ? this.down(key) : false;
+  }
+
+  consumeActionPressed(action: keyof KeyBindings): boolean {
+    const key = this.bindings[action];
+    return key ? this.consumePressed(key) : false;
+  }
+
+  consumeActionReleased(action: keyof KeyBindings): boolean {
+    const key = this.bindings[action];
+    return key ? this.consumeReleased(key) : false;
   }
 
   down(key: string): boolean {
@@ -52,10 +104,10 @@ export class Input {
     let x = 0;
     let y = 0;
 
-    if (this.down("a")) x -= 1;
-    if (this.down("d")) x += 1;
-    if (this.down("w")) y -= 1;
-    if (this.down("s")) y += 1;
+    if (this.down(this.bindings.left)) x -= 1;
+    if (this.down(this.bindings.right)) x += 1;
+    if (this.down(this.bindings.up)) y -= 1;
+    if (this.down(this.bindings.down)) y += 1;
 
     const len = Math.hypot(x, y);
     if (len > 0) {
