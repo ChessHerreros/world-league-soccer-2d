@@ -55,7 +55,13 @@ export class Arena {
     return this.goalTop + this.goalWidth;
   }
 
+  readonly outerMargin = 75;
+
   isInsideGoal(y: number): boolean {
     return y >= this.goalTop && y <= this.goalBottom;
+  }
+
+  isOutOfBounds(x: number, y: number): boolean {
+    return x < 0 || x > this.width || y < 0 || y > this.height;
   }
 }

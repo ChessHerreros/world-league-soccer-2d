@@ -195,48 +195,60 @@ export class Renderer {
     const availableWidth = Math.max(100, width - 48);
     const availableHeight = Math.max(100, height - (topMargin + bottomMargin));
 
-    // Calculate scale to fit arena.
-    // If the arena is very large (e.g. 3v3 / 4v4) or screen is small, we ensure scale is not smaller than minScale.
-    const fitScale = Math.min(availableWidth / arena.width, availableHeight / arena.height);
-    const minScale = Math.max(0.78, availableHeight / 720);
+    const outerMargin = arena.outerMargin ?? 75;
+    const totalW = arena.width + 2 * outerMargin;
+    const totalH = arena.height + 2 * outerMargin;
+
+    // Calculate scale so the pitch and outer run-off apron fit comfortably on screen
+    const fitScale = Math.min(availableWidth / totalW, availableHeight / totalH);
     
-    // Scale used: if arena fits on screen, scale = fitScale (full pitch visible, no scrolling).
-    // If fitScale < minScale, we zoom in to minScale and use camera tracking!
+    // Only use camera tracking if pitch does not fit at a readable scale (e.g. mobile or huge 4v4 pitches)
+    const minScale = 0.65;
     const isCameraTracking = fitScale < minScale;
     this.scale = isCameraTracking ? minScale : fitScale;
 
-    // Target position for camera focus (Player 1 if present, else center of field)
-    const targetPlayer = players.length > 0 ? players[0] : null;
-    const targetX = targetPlayer ? targetPlayer.position.x : arena.width / 2;
-    const targetY = targetPlayer ? targetPlayer.position.y : arena.height / 2;
-
-    // Lerp camera position smoothly
-    const lerpSpeed = 10 * dt;
-    this.camX += (targetX - this.camX) * Math.min(1, lerpSpeed);
-    this.camY += (targetY - this.camY) * Math.min(1, lerpSpeed);
-
     if (isCameraTracking) {
-      // Clamp camera focus so we don't show blank area outside stadium bounds
-      const halfViewWidth = availableWidth / (2 * this.scale);
-      const halfViewHeight = availableHeight / (2 * this.scale);
+      // Target position for camera focus (Player 1 if present, else center of field)
+      const targetPlayer = players.length > 0 ? players[0] : null;
+      const targetX = targetPlayer ? targetPlayer.position.x : arena.width / 2;
+      const targetY = targetPlayer ? targetPlayer.position.y : arena.height / 2;
 
-      const margin = 80; // Allow slight view past goal lines
-      const minCamX = halfViewWidth - margin;
-      const maxCamX = arena.width - halfViewWidth + margin;
-      const minCamY = halfViewHeight - margin;
-      const maxCamY = arena.height - halfViewHeight + margin;
+      // Lerp camera position smoothly
+      const lerpSpeed = 10 * dt;
+      this.camX += (targetX - this.camX) * Math.min(1, lerpSpeed);
+      this.camY += (targetY - this.camY) * Math.min(1, lerpSpeed);
 
-      const clampedCamX = Math.max(minCamX, Math.min(maxCamX, this.camX));
-      const clampedCamY = Math.max(minCamY, Math.min(maxCamY, this.camY));
+      const halfViewW = availableWidth / (2 * this.scale);
+      const halfViewH = availableHeight / (2 * this.scale);
+
+      // Clamp X: if field width fits in view, keep it centered; otherwise scroll within bounds
+      let clampedCamX = arena.width / 2;
+      if (halfViewW < totalW / 2) {
+        const minCamX = halfViewW - outerMargin;
+        const maxCamX = arena.width + outerMargin - halfViewW;
+        if (minCamX <= maxCamX) {
+          clampedCamX = Math.max(minCamX, Math.min(maxCamX, this.camX));
+        }
+      }
+
+      // Clamp Y: if field height fits in view, keep it centered; otherwise scroll within bounds
+      let clampedCamY = arena.height / 2;
+      if (halfViewH < totalH / 2) {
+        const minCamY = halfViewH - outerMargin;
+        const maxCamY = arena.height + outerMargin - halfViewH;
+        if (minCamY <= maxCamY) {
+          clampedCamY = Math.max(minCamY, Math.min(maxCamY, this.camY));
+        }
+      }
 
       this.offsetX = width / 2 - clampedCamX * this.scale;
       this.offsetY = topMargin + availableHeight / 2 - clampedCamY * this.scale;
     } else {
-      // Standard static fit mode
+      // Standard static fit mode: pitch & apron centered cleanly in viewport
       this.camX = arena.width / 2;
       this.camY = arena.height / 2;
-      this.offsetX = (width - arena.width * this.scale) / 2;
-      this.offsetY = topMargin + (availableHeight - arena.height * this.scale) / 2;
+      this.offsetX = width / 2 - (arena.width / 2) * this.scale;
+      this.offsetY = topMargin + availableHeight / 2 - (arena.height / 2) * this.scale;
     }
 
     ctx.save();
@@ -270,14 +282,14 @@ export class Renderer {
 
     // Position directly under the HTML HUD scoreboard (Screen Space: top center)
     const centerX = screenWidth / 2;
-    const posY = 64; // Under top scoreboard bar in screen coordinates
-    const badgeW = 152;
+    const posY = 74; // Under top scoreboard bar in screen coordinates
+    const badgeW = 224;
     const badgeH = 36;
 
     ctx.translate(centerX, posY);
 
     // Sleek dark pill container with subtle glowing red border
-    ctx.fillStyle = "rgba(11, 15, 25, 0.92)";
+    ctx.fillStyle = "rgba(11, 15, 25, 0.94)";
     ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
     ctx.lineWidth = 2;
 
@@ -287,13 +299,13 @@ export class Renderer {
     ctx.stroke();
 
     // Red Pulsing Indicator Circle (REC Dot to the left of text)
-    const pulseAlpha = 0.4 + 0.6 * Math.abs(Math.sin(Date.now() / 200));
+    const pulseAlpha = 0.45 + 0.55 * Math.abs(Math.sin(Date.now() / 200));
     const dotX = -badgeW / 2 + 22;
     const dotY = badgeH / 2;
 
     // Glowing outer pulse aura
     ctx.beginPath();
-    ctx.arc(dotX, dotY, 6.5, 0, Math.PI * 2);
+    ctx.arc(dotX, dotY, 7, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(239, 68, 68, ${pulseAlpha})`;
     ctx.shadowColor = "#ef4444";
     ctx.shadowBlur = 12;
@@ -301,17 +313,60 @@ export class Renderer {
 
     // Solid inner core for red recording dot
     ctx.beginPath();
-    ctx.arc(dotX, dotY, 3.2, 0, Math.PI * 2);
+    ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#ef4444";
+    ctx.shadowBlur = 0;
+    ctx.fill();
+
+    // Specular center dot
+    ctx.beginPath();
+    ctx.arc(dotX - 1, dotY - 1, 1.2, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
     ctx.fill();
 
     // REPLAY Text next to the red dot
     ctx.shadowBlur = 0;
-    ctx.font = "900 16px 'Outfit', system-ui, sans-serif";
+    ctx.font = "900 15px 'Outfit', -apple-system, system-ui, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("REPLAY", dotX + 15, dotY + 1);
+    ctx.fillText("REPLAY", dotX + 13, dotY + 1);
+
+    // Subtle vertical divider line
+    const divX = dotX + 88;
+    ctx.beginPath();
+    ctx.moveTo(divX, dotY - 9);
+    ctx.lineTo(divX, dotY + 9);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Key badge '[Y]'
+    const kbdX = divX + 14;
+    const kbdW = 20;
+    const kbdH = 18;
+    const kbdY = dotY - kbdH / 2;
+
+    ctx.beginPath();
+    ctx.roundRect(kbdX, kbdY, kbdW, kbdH, 4);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = "800 11px 'Outfit', -apple-system, system-ui, sans-serif";
+    ctx.fillStyle = "#ffd166";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Y", kbdX + kbdW / 2, dotY + 1);
+
+    // 'SKIP' text
+    ctx.font = "700 12px 'Outfit', -apple-system, system-ui, sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("SKIP", kbdX + kbdW + 8, dotY + 1);
 
     ctx.restore();
   }
@@ -453,8 +508,38 @@ export class Renderer {
   private drawField(arena: Arena): void {
     const ctx = this.ctx;
     const c = arena.cornerSize;
+    const outerMargin = arena.outerMargin ?? 85;
 
-    // Field Turf Background
+    // 1. Outer Stadium Run-Off Apron
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(
+      -outerMargin,
+      -outerMargin,
+      arena.width + 2 * outerMargin,
+      arena.height + 2 * outerMargin,
+      20
+    );
+    // Dark sleek stadium run-off turf
+    ctx.fillStyle = "#112e1f";
+    ctx.fill();
+
+    // Perimeter barrier curb
+    ctx.strokeStyle = "rgba(45, 80, 65, 0.9)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    // Outer subtle dashed buffer boundary line (36px outside pitch)
+    ctx.beginPath();
+    ctx.roundRect(-36, -36, arena.width + 72, arena.height + 72, 12);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // 2. Main Pitch Turf Background (inside the touchlines)
     ctx.fillStyle = "#1d7048";
     ctx.fillRect(0, 0, arena.width, arena.height);
 
@@ -466,8 +551,8 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
-    // Corner Triangles (Out of bounds chamfers)
-    ctx.fillStyle = "#0b0e14";
+    // Corner Triangles (Out of bounds chamfers matching the outer apron)
+    ctx.fillStyle = "#112e1f";
     // Top-Left Corner
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -650,6 +735,17 @@ export class Renderer {
       }
 
       ctx.shadowBlur = 0;
+    }
+
+    // Out of bounds slowdown indicator (amber dashed ring)
+    if (player.isOutOfBounds) {
+      ctx.beginPath();
+      ctx.arc(player.position.x, player.position.y, player.radius + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(245, 158, 11, 0.75)";
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Outer juicy glow and aura ring when charging or kicking

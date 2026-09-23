@@ -235,52 +235,72 @@ export class Physics {
       resolvePostCollision(player, post, 0.3);
     }
 
-    // 2. Corner chamfer diagonal walls collision
-    resolveCornerCollision(player, arena, 0.1);
-
-    // 3. Boundary walls collision
+    // 2. Outer stadium boundary (allows player to leave the pitch to get angles on the ball, clamped at outer barrier)
+    const outerMargin = arena.outerMargin ?? 85;
     const r = player.radius;
 
-    const inGoalY = arena.isInsideGoal(player.position.y);
-    const gd = arena.goalDepth;
+    const minX = -outerMargin + r;
+    const maxX = arena.width + outerMargin - r;
+    const minY = -outerMargin + r;
+    const maxY = arena.height + outerMargin - r;
 
-    if (player.position.y - r < 0) {
-      player.position.y = r;
-      player.velocity.y = Math.max(0, player.velocity.y);
+    if (player.position.x < minX) {
+      player.position.x = minX;
+      player.velocity.x = Math.max(0, player.velocity.x);
+    } else if (player.position.x > maxX) {
+      player.position.x = maxX;
+      player.velocity.x = Math.min(0, player.velocity.x);
     }
 
-    if (player.position.y + r > arena.height) {
-      player.position.y = arena.height - r;
+    if (player.position.y < minY) {
+      player.position.y = minY;
+      player.velocity.y = Math.max(0, player.velocity.y);
+    } else if (player.position.y > maxY) {
+      player.position.y = maxY;
       player.velocity.y = Math.min(0, player.velocity.y);
     }
 
-    // Left wall / Left goal net
-    if (!inGoalY && player.position.x - r < 0) {
-      player.position.x = r;
-      player.velocity.x = Math.max(0, player.velocity.x);
-    } else if (inGoalY && player.position.x - r < -gd + 10) {
-      player.position.x = -gd + 10 + r;
-      player.velocity.x = Math.max(0, player.velocity.x);
-    }
+    // 3. Goal net enclosure collisions (prevent walking through back or sides of net)
+    const gd = arena.goalDepth;
+    const inGoalY = arena.isInsideGoal(player.position.y);
 
-    // Right wall / Right goal net
-    if (!inGoalY && player.position.x + r > arena.width) {
-      player.position.x = arena.width - r;
-      player.velocity.x = Math.min(0, player.velocity.x);
-    } else if (inGoalY && player.position.x + r > arena.width + gd - 10) {
-      player.position.x = arena.width + gd - 10 - r;
-      player.velocity.x = Math.min(0, player.velocity.x);
-    }
-
-    // Top/Bottom net walls for deep goals
-    if (player.position.x < 0 || player.position.x > arena.width) {
-      if (player.position.y - r < arena.goalTop) {
-        player.position.y = arena.goalTop + r;
-        player.velocity.y = Math.max(0, player.velocity.y);
+    // Left goal net enclosure (between x: -gd and 0, and y: goalTop and goalBottom)
+    if (player.position.x < 0 && player.position.x > -gd - r) {
+      if (inGoalY) {
+        // Inside goal net: stop at back of net
+        if (player.position.x - r < -gd) {
+          player.position.x = -gd + r;
+          player.velocity.x = Math.max(0, player.velocity.x);
+        }
+      } else {
+        // Outside goal net: prevent walking through top or bottom net walls
+        if (player.position.y + r > arena.goalTop && player.position.y < arena.goalTop + 10) {
+          player.position.y = arena.goalTop - r;
+          player.velocity.y = Math.min(0, player.velocity.y);
+        } else if (player.position.y - r < arena.goalBottom && player.position.y > arena.goalBottom - 10) {
+          player.position.y = arena.goalBottom + r;
+          player.velocity.y = Math.max(0, player.velocity.y);
+        }
       }
-      if (player.position.y + r > arena.goalBottom) {
-        player.position.y = arena.goalBottom - r;
-        player.velocity.y = Math.min(0, player.velocity.y);
+    }
+
+    // Right goal net enclosure (between x: arena.width and arena.width + gd, and y: goalTop and goalBottom)
+    if (player.position.x > arena.width && player.position.x < arena.width + gd + r) {
+      if (inGoalY) {
+        // Inside goal net: stop at back of net
+        if (player.position.x + r > arena.width + gd) {
+          player.position.x = arena.width + gd - r;
+          player.velocity.x = Math.min(0, player.velocity.x);
+        }
+      } else {
+        // Outside goal net: prevent walking through top or bottom net walls
+        if (player.position.y + r > arena.goalTop && player.position.y < arena.goalTop + 10) {
+          player.position.y = arena.goalTop - r;
+          player.velocity.y = Math.min(0, player.velocity.y);
+        } else if (player.position.y - r < arena.goalBottom && player.position.y > arena.goalBottom - 10) {
+          player.position.y = arena.goalBottom + r;
+          player.velocity.y = Math.max(0, player.velocity.y);
+        }
       }
     }
   }

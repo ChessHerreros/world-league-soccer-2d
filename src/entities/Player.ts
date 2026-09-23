@@ -54,6 +54,9 @@ export class Player {
   lastInputAngle = 0; // 0 rad = Right (D), Math.PI/2 = Down (S), etc.
   isInputMoving = false;
 
+  // Out of bounds state (slowdown applied when outside pitch boundaries)
+  isOutOfBounds = false;
+
   constructor(config: PlayerConfig) {
     this.position = config.position.clone();
     this.team = config.team;
@@ -65,7 +68,8 @@ export class Player {
   dashDuration = 0.11;
   dashSpeed = 1600;
 
-  update(dt: number, inputX: number, inputY: number, wantSprint = false): void {
+  update(dt: number, inputX: number, inputY: number, wantSprint = false, isOutOfBounds = false): void {
+    this.isOutOfBounds = isOutOfBounds;
     this.animTime += dt;
 
     if (this.dashTimer > 0) {
@@ -89,8 +93,10 @@ export class Player {
     }
 
     if (!this.isDashing) {
-      const currentAccel = this.isSprinting ? 2400 : this.acceleration;
-      const currentMaxSpeed = this.isSprinting ? 570 : this.maxSpeed;
+      // Out of bounds slowdown factor (52% speed & accel, heavier damping to simulate off-pitch turf resistance)
+      const slowdown = this.isOutOfBounds ? 0.52 : 1.0;
+      const currentAccel = (this.isSprinting ? 2400 : this.acceleration) * slowdown;
+      const currentMaxSpeed = (this.isSprinting ? 570 : this.maxSpeed) * slowdown;
 
       this.velocity.x += inputX * currentAccel * dt;
       this.velocity.y += inputY * currentAccel * dt;
@@ -100,8 +106,15 @@ export class Player {
         this.velocity.scale(currentMaxSpeed / speed);
       }
 
-      const damping = Math.pow(this.damping, dt * 60);
+      const dampingBase = this.isOutOfBounds ? 0.74 : this.damping;
+      const damping = Math.pow(dampingBase, dt * 60);
       this.velocity.scale(damping);
+    } else if (this.isOutOfBounds) {
+      // Dampen dash velocity if dashing outside field bounds
+      const speed = this.velocity.length();
+      if (speed > 950) {
+        this.velocity.scale(950 / speed);
+      }
     }
 
     this.position.x += this.velocity.x * dt;

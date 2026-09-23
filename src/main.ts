@@ -47,6 +47,16 @@ netManager.onRoomUpdated((room) => {
   }
 });
 
+netManager.onLobbySound((data) => {
+  if (data?.type === "player_join") {
+    menu.playLobbyJoinSound();
+  } else if (data?.type === "team_switch") {
+    menu.playLobbySwitchSound();
+  } else if (data?.type === "match_start") {
+    menu.playMatchStartSound();
+  }
+});
+
 netManager.onGameStarted((room) => {
   menu.hideOverlay();
   game.setOnlineNetworkManager(netManager);
@@ -61,7 +71,8 @@ netManager.onGameStarted((room) => {
   const hostObj = playerList.find((p: any) => p.id === room?.hostId || p.socketId === room?.hostId) || playerList[0];
   const guestObj = playerList.find((p: any) => p.id !== room?.hostId && p.socketId !== room?.hostId) || playerList[1];
 
-  const myName = menu.getPlayerName() || "Jugador";
+  const myConfig = menu.getPlayerConfig();
+  const myName = myConfig.playerName || "Jugador";
   const hostName = hostObj?.name || "Host";
   const guestName = guestObj?.name || "Invitado";
 
@@ -75,6 +86,7 @@ netManager.onGameStarted((room) => {
     customColor: null,
     borderStyle: "classic",
     pattern: "spain",
+    goalSound: myConfig.goalSound || "stadium_horn",
     playerName: myName,
     hostName: hostName,
     guestName: guestName,

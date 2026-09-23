@@ -1,6 +1,48 @@
 export class SoundEffects {
-  private ctx: AudioContext | null = null;
+  private static sharedCtx: AudioContext | null = null;
+  private static listenersAttached = false;
   private isMuted = false;
+
+  constructor() {
+    SoundEffects.ensureGlobalUnlockListeners();
+  }
+
+  static unlock(): AudioContext | null {
+    try {
+      if (!SoundEffects.sharedCtx && typeof window !== "undefined") {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          SoundEffects.sharedCtx = new AudioCtx();
+        }
+      }
+      if (SoundEffects.sharedCtx && SoundEffects.sharedCtx.state === "suspended") {
+        SoundEffects.sharedCtx.resume().catch(() => {});
+      }
+    } catch {
+      // Audio context unlock error fallback
+    }
+    return SoundEffects.sharedCtx;
+  }
+
+  private static ensureGlobalUnlockListeners(): void {
+    if (SoundEffects.listenersAttached || typeof window === "undefined") return;
+    SoundEffects.listenersAttached = true;
+
+    const unlockHandler = () => {
+      SoundEffects.unlock();
+      if (SoundEffects.sharedCtx && SoundEffects.sharedCtx.state === "running") {
+        window.removeEventListener("pointerdown", unlockHandler);
+        window.removeEventListener("keydown", unlockHandler);
+        window.removeEventListener("touchstart", unlockHandler);
+        window.removeEventListener("click", unlockHandler);
+      }
+    };
+
+    window.addEventListener("pointerdown", unlockHandler, { passive: true });
+    window.addEventListener("keydown", unlockHandler, { passive: true });
+    window.addEventListener("touchstart", unlockHandler, { passive: true });
+    window.addEventListener("click", unlockHandler, { passive: true });
+  }
 
   setMuted(muted: boolean): void {
     this.isMuted = muted;
@@ -8,20 +50,13 @@ export class SoundEffects {
 
   private initCtx(): AudioContext | null {
     if (this.isMuted) return null;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      this.ctx = new AudioCtx();
-    }
-    if (this.ctx.state === "suspended") {
-      this.ctx.resume();
-    }
-    return this.ctx;
+    return SoundEffects.unlock();
   }
 
   playKick(powerRatio = 0): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
       // Base kick oscillator
@@ -47,7 +82,7 @@ export class SoundEffects {
 
       // Noise layer for charged kick impact
       if (powerRatio > 0.2) {
-        const bufferSize = ctx.sampleRate * 0.1;
+        const bufferSize = Math.floor(ctx.sampleRate * 0.1);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -74,7 +109,7 @@ export class SoundEffects {
   playDribble(): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
       const osc = ctx.createOscillator();
@@ -100,7 +135,7 @@ export class SoundEffects {
   playDash(): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
       const osc = ctx.createOscillator();
@@ -123,10 +158,52 @@ export class SoundEffects {
     }
   }
 
+  playPostHit(intensity = 1): void {
+    try {
+      const ctx = this.initCtx();
+      if (!ctx || ctx.state !== "running") return;
+      const now = ctx.currentTime;
+
+      // Metallic post "CLANG" tone
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(980, now);
+      osc.frequency.exponentialRampToValueAtTime(440, now + 0.22);
+
+      gain.gain.setValueAtTime(0.6 * Math.min(1.2, intensity), now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.22);
+
+      // High overtone metallic ping
+      const ping = ctx.createOscillator();
+      const pingGain = ctx.createGain();
+      ping.type = "sine";
+      ping.frequency.setValueAtTime(1760, now);
+      ping.frequency.exponentialRampToValueAtTime(1200, now + 0.18);
+      pingGain.gain.setValueAtTime(0.3 * Math.min(1.2, intensity), now);
+      pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+      ping.connect(pingGain);
+      pingGain.connect(ctx.destination);
+
+      ping.start(now);
+      ping.stop(now + 0.18);
+    } catch {
+      // Audio fallback
+    }
+  }
+
   playExplosion(): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
       const duration = 0.45;
 
@@ -153,7 +230,7 @@ export class SoundEffects {
   playCountdown(isGo = false): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
       const osc = ctx.createOscillator();
@@ -183,13 +260,130 @@ export class SoundEffects {
     }
   }
 
-  playGoal(): void {
+  playWhistle(type: "start" | "goal" | "end" = "start"): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
-      // Whistle sound
+      const playChirp = (startTime: number, duration: number, freq: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, startTime);
+        osc.frequency.setValueAtTime(freq + 250, startTime + duration * 0.5);
+        osc.frequency.setValueAtTime(freq, startTime + duration);
+
+        gain.gain.setValueAtTime(0.45, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+      };
+
+      if (type === "start") {
+        playChirp(now, 0.12, 1900);
+        playChirp(now + 0.16, 0.28, 2200);
+      } else if (type === "end") {
+        playChirp(now, 0.14, 1800);
+        playChirp(now + 0.18, 0.14, 1800);
+        playChirp(now + 0.36, 0.45, 2100);
+      } else {
+        // Goal
+        playChirp(now, 0.5, 2000);
+      }
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  playLobbyJoin(): void {
+    try {
+      const ctx = this.initCtx();
+      if (!ctx || ctx.state !== "running") return;
+      const now = ctx.currentTime;
+
+      // Two-tone cheerful chime
+      [523.25, 659.25].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + i * 0.09);
+        gain.gain.setValueAtTime(0.3, now + i * 0.09);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.09 + 0.18);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.09);
+        osc.stop(now + i * 0.09 + 0.18);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  playLobbySwitch(): void {
+    try {
+      const ctx = this.initCtx();
+      if (!ctx || ctx.state !== "running") return;
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(340, now);
+      osc.frequency.exponentialRampToValueAtTime(680, now + 0.08);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  playButtonClick(): void {
+    try {
+      const ctx = this.initCtx();
+      if (!ctx || ctx.state !== "running") return;
+      const now = ctx.currentTime;
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(700, now);
+      osc.frequency.exponentialRampToValueAtTime(350, now + 0.04);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.04);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  playGoal(soundId?: string): void {
+    if (soundId && soundId !== "stadium_horn" && soundId !== "default") {
+      this.playGoalSoundPreview(soundId);
+      return;
+    }
+
+    try {
+      const ctx = this.initCtx();
+      if (!ctx || ctx.state !== "running") return;
+      const now = ctx.currentTime;
+
+      // Whistle sound + stadium horn
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -214,7 +408,7 @@ export class SoundEffects {
   playGoalSoundPreview(soundId: string): void {
     try {
       const ctx = this.initCtx();
-      if (!ctx) return;
+      if (!ctx || ctx.state !== "running") return;
       const now = ctx.currentTime;
 
       if (soundId === "airhorn") {
@@ -271,7 +465,7 @@ export class SoundEffects {
           osc.stop(now + i * 0.08 + 0.08);
         });
       } else if (soundId === "thunder") {
-        const bufferSize = ctx.sampleRate * 0.4;
+        const bufferSize = Math.floor(ctx.sampleRate * 0.4);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;

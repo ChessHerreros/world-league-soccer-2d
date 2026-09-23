@@ -87,6 +87,7 @@ export class Game {
   setOnlineNetworkManager(netManager: any): void {
     this.netManager = netManager;
     this.isOnlineMode = true;
+    SoundEffects.unlock();
 
     netManager.onMatchEnded((data: any) => {
       if (data) {
@@ -94,6 +95,45 @@ export class Game {
         this.redScore = data.redScore;
       }
       this.triggerGameOver();
+    });
+
+    netManager.onGameSound((data: any) => {
+      if (!this.isOnlineMode || !data) return;
+      const localSocketId = this.netManager?.getSocket()?.id;
+
+      if (data.type === "kick") {
+        if (data.playerId !== localSocketId) {
+          this.sound.playKick(data.powerRatio || 0);
+          if (this.ball) {
+            this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, data.powerRatio || 0);
+          }
+        }
+      } else if (data.type === "dash") {
+        if (data.playerId !== localSocketId) {
+          this.sound.playDash();
+        }
+      } else if (data.type === "dribble") {
+        if (data.playerId !== localSocketId) {
+          this.sound.playDribble();
+        }
+      } else if (data.type === "post_hit") {
+        this.sound.playPostHit(data.intensity || 1);
+        if (this.ball) {
+          this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, 0.4);
+        }
+      } else if (data.type === "explosion") {
+        this.sound.playExplosion();
+        if (this.ball) {
+          this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, 1.3);
+          this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, 0.85);
+        }
+      } else if (data.type === "goal") {
+        this.sound.playGoal(data.soundId);
+        this.goalBannerTimer = 1.6;
+        this.goalScorerTeam = data.scorerTeam || "blue";
+      } else if (data.type === "whistle") {
+        this.sound.playWhistle(data.whistleType || "start");
+      }
     });
 
     netManager.onRoomStateUpdate((roomState: any) => {
@@ -105,9 +145,11 @@ export class Game {
         this.blueScore = roomState.blueScore;
         this.redScore = roomState.redScore;
         this.options.onScore?.(this.blueScore, this.redScore);
-        this.sound.playGoal();
-        this.goalBannerTimer = 1.6;
-        this.goalScorerTeam = scorerTeam;
+        if (this.goalBannerTimer <= 0) {
+          this.sound.playGoal();
+          this.goalBannerTimer = 1.6;
+          this.goalScorerTeam = scorerTeam;
+        }
       }
 
       if (roomState.timeRemaining !== undefined) {
@@ -431,6 +473,14 @@ export class Game {
       let countdownText: string | null = null;
       let countdownProgress = 0;
       let goalBanner: { team: "blue" | "red"; progress: number } | null = null;
+      let isReplay = false;
+
+      // Handle 'Y' key to skip goal replay or celebration
+      if (this.input.consumePressed("y") || (this.isReplayingGoal && this.input.down("y"))) {
+        if (this.isReplayingGoal || this.goalBannerTimer > 0) {
+          this.skipGoalReplay();
+        }
+      }
 
       // In offline mode, keep the match timer display updated and visible during countdown / goal / replay
       if (!this.isOnlineMode) {
@@ -472,20 +522,9 @@ export class Game {
         if (this.replayTimer <= 0) {
           this.isReplayingGoal = false;
           this.resetMatchPositions();
+        } else {
+          isReplay = true;
         }
-
-        this.renderer.render(
-          this.arena,
-          this.players,
-          this.ball,
-          this.blueScore,
-          this.redScore,
-          delta,
-          null,
-          0,
-          null,
-          true // isReplay = true!
-        );
       } else if (this.goalBannerTimer > 0) {
         this.goalBannerTimer -= delta;
         goalBanner = {
@@ -558,7 +597,8 @@ export class Game {
         delta,
         countdownText,
         countdownProgress,
-        goalBanner
+        goalBanner,
+        isReplay
       );
     }
 
@@ -590,11 +630,12 @@ export class Game {
       }
 
       // Local player physics prediction so WASD moves immediately with ZERO delay
+      const p1OutOfBounds = this.arena.isOutOfBounds(p1.position.x, p1.position.y);
       if (!p1.isDashing) {
-        p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint);
+        p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint, p1OutOfBounds);
         Physics.playerArena(p1, this.arena);
       } else {
-        p1.update(dt, 0, 0, false);
+        p1.update(dt, 0, 0, false, p1OutOfBounds);
       }
 
       // 2. Client-Side Charging & Aiming Dots Indicator
@@ -611,11 +652,14 @@ export class Game {
       this.ball.chargeRatio = Math.max(this.ball.chargeRatio, p1.chargeRatio);
 
       // 3. Audio & Visual Effects Immediate Client-Side Responsiveness
-      if (spacePressed) {
+      const shouldKickLocal = (spacePressed || (isSpaceDown && nearBall)) && p1.canKick() && nearBall;
+      if (shouldKickLocal) {
         p1.kick();
-        if (nearBall) {
-          this.sound.playKick();
-        }
+        this.sound.playKick(p1.chargeRatio);
+        this.renderer.addShockwave(this.ball.position.x, this.ball.position.y, p1.chargeRatio);
+        this.renderer.addKickParticles(this.ball.position.x, this.ball.position.y, dx, dy, p1.chargeRatio, p1.team);
+      } else if (spacePressed) {
+        p1.kick();
       }
 
       if (qPressed) this.lastQPressTime = performance.now();
@@ -686,8 +730,9 @@ export class Game {
       return; // Authoritative state is computed and broadcast by central server!
     } else if (this.isDemoMode) {
       // In background demo match, P1 is driven by Bot AI as well!
+      const p1OutOfBounds = this.arena.isOutOfBounds(p1.position.x, p1.position.y);
       const p1Action = this.botBrain.update(dt, p1, this.players, this.ball, this.arena, 0);
-      p1.update(dt, p1Action.moveX, p1Action.moveY, p1Action.sprint);
+      p1.update(dt, p1Action.moveX, p1Action.moveY, p1Action.sprint, p1OutOfBounds);
       if (p1Action.kick && p1.canKick()) {
         const dx = this.ball.position.x - p1.position.x;
         const dy = this.ball.position.y - p1.position.y;
@@ -698,7 +743,8 @@ export class Game {
     } else {
       const p1Movement = this.input.movementP1();
       const p1WantSprint = this.input.down("shift");
-      p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint);
+      const p1OutOfBounds = this.arena.isOutOfBounds(p1.position.x, p1.position.y);
+      p1.update(dt, p1Movement.x, p1Movement.y, p1WantSprint, p1OutOfBounds);
     }
 
     // Update all non-P1 players (Human P2 for Local 2P or Bot AI)
@@ -709,7 +755,8 @@ export class Game {
         // Human Player 2 controlling first Red team player in Local 2P
         const p2Movement = this.input.movementP2();
         const p2WantSprint = this.input.down("shift") || this.input.down("r");
-        player.update(dt, p2Movement.x, p2Movement.y, p2WantSprint);
+        const p2OutOfBounds = this.arena.isOutOfBounds(player.position.x, player.position.y);
+        player.update(dt, p2Movement.x, p2Movement.y, p2WantSprint, p2OutOfBounds);
 
         if (this.input.consumePressed("enter") || this.input.consumePressed("k")) {
           this.kick(player);
@@ -720,8 +767,9 @@ export class Game {
         }
       } else if (!this.isOnlineMode) {
         // AI Bot controlling teammates and opponents in offline modes!
+        const botOutOfBounds = this.arena.isOutOfBounds(player.position.x, player.position.y);
         const botAction = this.botBrain.update(dt, player, this.players, this.ball, this.arena, index);
-        player.update(dt, botAction.moveX, botAction.moveY, botAction.sprint);
+        player.update(dt, botAction.moveX, botAction.moveY, botAction.sprint, botOutOfBounds);
 
         if (botAction.kick && player.canKick()) {
           const dx = this.ball.position.x - player.position.x;
@@ -1028,6 +1076,17 @@ export class Game {
     this.isGameOver = true;
     const winner = this.blueScore > this.redScore ? "blue" : this.redScore > this.blueScore ? "red" : "draw";
     this.options.onGameOver?.(winner, this.blueScore, this.redScore);
+  }
+
+  private skipGoalReplay(): void {
+    if (!this.isReplayingGoal && this.goalBannerTimer <= 0) return;
+    this.isReplayingGoal = false;
+    this.goalBannerTimer = 0;
+    this.replayTimer = 0;
+    this.resetMatchPositions();
+    if (this.isOnlineMode && this.netManager) {
+      this.netManager.skipReplay();
+    }
   }
 
   private resetMatchPositions(): void {

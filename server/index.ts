@@ -45,6 +45,7 @@ interface RoomPlayer {
   customColor: string | null;
   borderStyle: string;
   pattern: string;
+  goalSound?: string;
   input: PlayerInput;
 }
 
@@ -61,6 +62,7 @@ interface RoomState {
   duration: number;
   timeRemaining: number;
   isExtraTime: boolean;
+  recentKicks?: number[];
   ball: {
     x: number;
     y: number;
@@ -365,22 +367,32 @@ setInterval(() => {
     room.ball.vy *= Math.pow(0.992, TICK * 60);
 
     // Goal posts collision with ball
+    const ballObj = { x: room.ball.x, y: room.ball.y, vx: room.ball.vx, vy: room.ball.vy, radius: ballRadius };
     for (const post of posts) {
-      resolvePostCollision(
-        { x: room.ball.x, y: room.ball.y, vx: room.ball.vx, vy: room.ball.vy, radius: ballRadius },
-        post,
-        0.88
-      );
+      const bSpeed = Math.hypot(room.ball.vx, room.ball.vy);
+      if (resolvePostCollision(ballObj, post, 0.88)) {
+        room.ball.x = ballObj.x;
+        room.ball.y = ballObj.y;
+        room.ball.vx = ballObj.vx;
+        room.ball.vy = ballObj.vy;
+        if (bSpeed > 50) {
+          io.to(code).emit("gameSound", { type: "post_hit", intensity: Math.min(1.5, bSpeed / 300) });
+        }
+      }
     }
 
     // Corner chamfer diagonal walls
     resolveCornerCollision(
-      { x: room.ball.x, y: room.ball.y, vx: room.ball.vx, vy: room.ball.vy, radius: ballRadius },
+      ballObj,
       width,
       height,
       cornerSize,
       0.86
     );
+    room.ball.x = ballObj.x;
+    room.ball.y = ballObj.y;
+    room.ball.vx = ballObj.vx;
+    room.ball.vy = ballObj.vy;
 
     // Boundary walls collision
     const ballInGoalY = room.ball.y >= goalTop && room.ball.y <= goalBottom;
@@ -426,9 +438,14 @@ setInterval(() => {
     if (room.ball.x < -ballRadius && ballInGoalY) {
       room.redScore++;
       room.lastScorerTeam = "red";
+      const scorer = Object.values(room.players).find(p => p.team === "red" && p.socketId === room.ball.lastKickerTeam) || Object.values(room.players).find(p => p.team === "red");
+      const soundId = scorer?.goalSound || "stadium_horn";
+      io.to(code).emit("gameSound", { type: "goal", scorerTeam: "red", soundId });
+
       if (room.isExtraTime || room.redScore >= 5) {
         room.status = "ended";
         const winner = room.blueScore > room.redScore ? "blue" : "red";
+        io.to(code).emit("gameSound", { type: "whistle", whistleType: "end" });
         io.to(code).emit("matchEnded", {
           winner,
           blueScore: room.blueScore,
@@ -444,9 +461,14 @@ setInterval(() => {
     } else if (room.ball.x > width + ballRadius && ballInGoalY) {
       room.blueScore++;
       room.lastScorerTeam = "blue";
+      const scorer = Object.values(room.players).find(p => p.team === "blue" && p.socketId === room.ball.lastKickerTeam) || Object.values(room.players).find(p => p.team === "blue");
+      const soundId = scorer?.goalSound || "stadium_horn";
+      io.to(code).emit("gameSound", { type: "goal", scorerTeam: "blue", soundId });
+
       if (room.isExtraTime || room.blueScore >= 5) {
         room.status = "ended";
         const winner = room.blueScore > room.redScore ? "blue" : "red";
+        io.to(code).emit("gameSound", { type: "whistle", whistleType: "end" });
         io.to(code).emit("matchEnded", {
           winner,
           blueScore: room.blueScore,
@@ -534,6 +556,8 @@ setInterval(() => {
           room.ball.vy += dragY * dragPower;
           p.vx += dragX * 45;
           p.vy += dragY * 45;
+
+          io.to(code).emit("gameSound", { type: "dribble", playerId: socketId });
         }
         inp.dribble = null;
       }
@@ -559,14 +583,19 @@ setInterval(() => {
           const dashImpulse = 1050;
           p.vx = dx * dashImpulse;
           p.vy = dy * dashImpulse;
+
+          io.to(code).emit("gameSound", { type: "dash", playerId: socketId });
         }
         inp.dash = false;
       }
 
-      // Movement & Sprint
+      // Movement & Sprint with out-of-bounds slowdown
+      const isOutOfBounds = p.x < 0 || p.x > width || p.y < 0 || p.y > height;
+      const slowdown = isOutOfBounds ? 0.52 : 1.0;
+
       const isMoving = Math.hypot(inp.moveX, inp.moveY) > 0.1;
-      const accel = inp.sprint && p.stamina > 2 ? 2400 : 1800;
-      const maxSpd = inp.sprint && p.stamina > 2 ? 570 : 420;
+      const accel = (inp.sprint && p.stamina > 2 ? 2400 : 1800) * slowdown;
+      const maxSpd = (inp.sprint && p.stamina > 2 ? 570 : 420) * slowdown;
 
       if (inp.sprint && isMoving && p.stamina > 2) {
         p.isSprinting = true;
@@ -585,51 +614,90 @@ setInterval(() => {
           p.vx = (p.vx / spd) * maxSpd;
           p.vy = (p.vy / spd) * maxSpd;
         }
-        p.vx *= Math.pow(0.82, TICK * 60);
-        p.vy *= Math.pow(0.82, TICK * 60);
+        const dampingBase = isOutOfBounds ? 0.74 : 0.82;
+        p.vx *= Math.pow(dampingBase, TICK * 60);
+        p.vy *= Math.pow(dampingBase, TICK * 60);
+      } else if (isOutOfBounds) {
+        const spd = Math.hypot(p.vx, p.vy);
+        if (spd > 950) {
+          p.vx = (p.vx / spd) * 950;
+          p.vy = (p.vy / spd) * 950;
+        }
       }
 
       p.x += p.vx * TICK;
       p.y += p.vy * TICK;
 
-      // Arena bounds for players (allowing entry inside goal nets)
+      // Outer stadium boundary for players (allow moving outside the pitch, but not infinitely)
+      const outerMargin = 75;
+      const minX = -outerMargin + playerRadius;
+      const maxX = width + outerMargin - playerRadius;
+      const minY = -outerMargin + playerRadius;
+      const maxY = height + outerMargin - playerRadius;
+
+      if (p.x < minX) {
+        p.x = minX;
+        p.vx = Math.max(0, p.vx);
+      } else if (p.x > maxX) {
+        p.x = maxX;
+        p.vx = Math.min(0, p.vx);
+      }
+
+      if (p.y < minY) {
+        p.y = minY;
+        p.vy = Math.max(0, p.vy);
+      } else if (p.y > maxY) {
+        p.y = maxY;
+        p.vy = Math.min(0, p.vy);
+      }
+
+      // Goal net enclosure collisions
       const pInGoalY = p.y >= goalTop && p.y <= goalBottom;
-      if (!pInGoalY && p.x - playerRadius < 0) {
-        p.x = playerRadius;
-        p.vx = Math.max(0, p.vx);
-      } else if (pInGoalY && p.x - playerRadius < -goalDepth + 10) {
-        p.x = -goalDepth + 10 + playerRadius;
-        p.vx = Math.max(0, p.vx);
-      }
-
-      if (!pInGoalY && p.x + playerRadius > width) {
-        p.x = width - playerRadius;
-        p.vx = Math.min(0, p.vx);
-      } else if (pInGoalY && p.x + playerRadius > width + goalDepth - 10) {
-        p.x = width + goalDepth - 10 - playerRadius;
-        p.vx = Math.min(0, p.vx);
-      }
-
-      if (p.x < 0 || p.x > width) {
-        if (p.y - playerRadius < goalTop) {
-          p.y = goalTop + playerRadius;
-          p.vy = Math.max(0, p.vy);
-        }
-        if (p.y + playerRadius > goalBottom) {
-          p.y = goalBottom - playerRadius;
-          p.vy = Math.min(0, p.vy);
+      // Left goal net
+      if (p.x < 0 && p.x > -goalDepth - playerRadius) {
+        if (pInGoalY) {
+          if (p.x - playerRadius < -goalDepth) {
+            p.x = -goalDepth + playerRadius;
+            p.vx = Math.max(0, p.vx);
+          }
+        } else {
+          if (p.y + playerRadius > goalTop && p.y < goalTop + 10) {
+            p.y = goalTop - playerRadius;
+            p.vy = Math.min(0, p.vy);
+          } else if (p.y - playerRadius < goalBottom && p.y > goalBottom - 10) {
+            p.y = goalBottom + playerRadius;
+            p.vy = Math.max(0, p.vy);
+          }
         }
       }
 
-      p.y = Math.max(playerRadius, Math.min(height - playerRadius, p.y));
+      // Right goal net
+      if (p.x > width && p.x < width + goalDepth + playerRadius) {
+        if (pInGoalY) {
+          if (p.x + playerRadius > width + goalDepth) {
+            p.x = width + goalDepth - playerRadius;
+            p.vx = Math.min(0, p.vx);
+          }
+        } else {
+          if (p.y + playerRadius > goalTop && p.y < goalTop + 10) {
+            p.y = goalTop - playerRadius;
+            p.vy = Math.min(0, p.vy);
+          } else if (p.y - playerRadius < goalBottom && p.y > goalBottom - 10) {
+            p.y = goalBottom + playerRadius;
+            p.vy = Math.max(0, p.vy);
+          }
+        }
+      }
 
       // Post collisions for players
+      const playerObj = { x: p.x, y: p.y, vx: p.vx, vy: p.vy, radius: playerRadius };
       for (const post of posts) {
-        resolvePostCollision(
-          { x: p.x, y: p.y, vx: p.vx, vy: p.vy, radius: playerRadius },
-          post,
-          0.3
-        );
+        if (resolvePostCollision(playerObj, post, 0.3)) {
+          p.x = playerObj.x;
+          p.y = playerObj.y;
+          p.vx = playerObj.vx;
+          p.vy = playerObj.vy;
+        }
       }
 
       // Player-Ball Collision (Passive Touch)
@@ -703,6 +771,27 @@ setInterval(() => {
         p.isCharging = false;
         p.isKicking = false;
         inp.kick = false;
+
+        io.to(code).emit("gameSound", {
+          type: "kick",
+          playerId: socketId,
+          powerRatio: currentCharge,
+          x: room.ball.x,
+          y: room.ball.y
+        });
+
+        // Track rapid kick spam / cluster explosion
+        if (!room.recentKicks) room.recentKicks = [];
+        const nowKick = Date.now();
+        room.recentKicks.push(nowKick);
+        room.recentKicks = room.recentKicks.filter(t => nowKick - t < 900);
+        if (room.recentKicks.length >= 5) {
+          room.ball.vx = 0;
+          room.ball.vy = 0;
+          room.ball.chargeRatio = 0;
+          room.recentKicks = [];
+          io.to(code).emit("gameSound", { type: "explosion" });
+        }
       } else if (inp.kick) {
         inp.kick = false;
       }
@@ -779,6 +868,7 @@ io.on("connection", (socket: Socket) => {
           customColor: cfg.customColor || null,
           borderStyle: cfg.borderStyle || "classic",
           pattern: cfg.pattern || "spain",
+          goalSound: cfg.goalSound || "stadium_horn",
           input: { moveX: 0, moveY: 0, sprint: false, kick: false, isHoldingSpace: false, dribble: null, dash: false }
         }
       }
@@ -829,12 +919,14 @@ io.on("connection", (socket: Socket) => {
       customColor: cfg.customColor || null,
       borderStyle: cfg.borderStyle || "classic",
       pattern: cfg.pattern || "spain",
+      goalSound: cfg.goalSound || "stadium_horn",
       input: { moveX: 0, moveY: 0, sprint: false, kick: false, isHoldingSpace: false, dribble: null, dash: false }
     };
 
     room.players[socket.id] = newPlayer;
     socket.join(code);
 
+    io.to(code).emit("lobbySound", { type: "player_join", playerName: newPlayer.name });
     io.to(code).emit("roomUpdated", room);
     callback({ success: true, roomCode: code, room });
   });
@@ -845,6 +937,7 @@ io.on("connection", (socket: Socket) => {
     const room = rooms[code];
     if (room && room.players[socket.id]) {
       room.players[socket.id].team = data.team;
+      io.to(code).emit("lobbySound", { type: "team_switch", team: data.team, playerId: socket.id });
       io.to(code).emit("roomUpdated", room);
     }
   });
@@ -859,6 +952,8 @@ io.on("connection", (socket: Socket) => {
       room.goalTimer = 0;
       room.timeRemaining = room.duration || 180;
       resetPositions(room);
+      io.to(code).emit("lobbySound", { type: "match_start" });
+      io.to(code).emit("gameSound", { type: "whistle", whistleType: "start" });
       io.to(code).emit("gameStarted", room);
       io.to(code).emit("roomStateUpdate", room);
     }
@@ -881,6 +976,19 @@ io.on("connection", (socket: Socket) => {
         kick: preservedKick,
         dash: preservedDash,
       };
+    }
+  });
+
+  // Skip Replay Event (Fast-forward to kickoff countdown)
+  socket.on("skipReplay", (data: { roomCode: string }) => {
+    const code = (data.roomCode || "").toUpperCase().trim();
+    const room = rooms[code];
+    if (room && (room.status === "goal" || room.goalTimer > 0)) {
+      room.status = "countdown";
+      room.countdownTimer = 3.8;
+      room.goalTimer = 0;
+      resetPositions(room);
+      io.to(code).emit("roomStateUpdate", room);
     }
   });
 

@@ -15,6 +15,7 @@ export interface MatchConfig {
   customColor: string | null;
   borderStyle: "classic" | "gold" | "neon" | "rainbow";
   pattern: "classic" | "halves" | "checker" | "stripes" | "rings" | "sash" | "diamond" | "spain";
+  goalSound?: string;
   playerName?: string;
 }
 
@@ -33,6 +34,7 @@ export class MenuManager {
   private customColor: string | null = null;
   private borderStyle: "classic" | "gold" | "neon" | "rainbow" = "classic";
   private pattern: "classic" | "halves" | "checker" | "stripes" | "rings" | "sash" | "diamond" | "spain" = "spain";
+  private goalSound: string = "stadium_horn";
   private selectedItemId = "spain";
 
   private onStartMatchCallback?: (config: MatchConfig) => void;
@@ -67,6 +69,7 @@ export class MenuManager {
       customColor: this.customColor,
       borderStyle: this.borderStyle,
       pattern: this.pattern,
+      goalSound: this.goalSound,
       skinIndex: this.currentSkin,
     };
   }
@@ -419,9 +422,12 @@ export class MenuManager {
           centerCol.querySelectorAll(".pattern-item-card").forEach((c) => c.classList.remove("selected"));
           card.classList.add("selected");
           this.selectedItemId = card.dataset.id || "spain";
+          this.sound.playButtonClick();
           if (card.dataset.cat === "Discs") {
             this.pattern = (card.dataset.id as any) || "spain";
             updateRightPreview();
+          } else if (card.dataset.cat === "GoalSound") {
+            this.goalSound = card.dataset.id || "stadium_horn";
           }
         });
       });
@@ -731,13 +737,18 @@ export class MenuManager {
       </div>
     `;
 
-    document.querySelector("#btn-back")?.addEventListener("click", () => this.showMainMenu());
+    document.querySelector("#btn-back")?.addEventListener("click", () => {
+      this.sound.playButtonClick();
+      this.showMainMenu();
+    });
 
     document.querySelector("#btn-create-room")?.addEventListener("click", () => {
+      this.sound.playButtonClick();
       this.onOnlineRoomCallback?.("create");
     });
 
     document.querySelector("#btn-join-room")?.addEventListener("click", () => {
+      this.sound.playButtonClick();
       const codeInput = this.overlay.querySelector<HTMLInputElement>("#input-room-code");
       const code = codeInput?.value.trim().toUpperCase();
       if (code && code.length === 4) {
@@ -805,13 +816,37 @@ export class MenuManager {
       </div>
     `;
 
-    document.querySelector("#btn-back")?.addEventListener("click", () => this.showMainMenu());
-    document.querySelector("#btn-join-blue")?.addEventListener("click", () => onSwitchTeam("blue"));
-    document.querySelector("#btn-join-red")?.addEventListener("click", () => onSwitchTeam("red"));
+    document.querySelector("#btn-back")?.addEventListener("click", () => {
+      this.sound.playButtonClick();
+      this.showMainMenu();
+    });
+    document.querySelector("#btn-join-blue")?.addEventListener("click", () => {
+      this.sound.playLobbySwitch();
+      onSwitchTeam("blue");
+    });
+    document.querySelector("#btn-join-red")?.addEventListener("click", () => {
+      this.sound.playLobbySwitch();
+      onSwitchTeam("red");
+    });
 
     if (isHost) {
-      document.querySelector("#btn-start-online")?.addEventListener("click", () => onStart());
+      document.querySelector("#btn-start-online")?.addEventListener("click", () => {
+        this.sound.playWhistle("start");
+        onStart();
+      });
     }
+  }
+
+  playLobbyJoinSound(): void {
+    this.sound.playLobbyJoin();
+  }
+
+  playLobbySwitchSound(): void {
+    this.sound.playLobbySwitch();
+  }
+
+  playMatchStartSound(): void {
+    this.sound.playWhistle("start");
   }
 
   hideOverlay(): void {

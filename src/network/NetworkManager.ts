@@ -74,6 +74,12 @@ export class NetworkManager {
     }
   }
 
+  skipReplay(): void {
+    if (this.socket && this.currentRoomCode) {
+      this.socket.emit("skipReplay", { roomCode: this.currentRoomCode });
+    }
+  }
+
   onRoomUpdated(cb: (room: any) => void): void {
     this.socket?.on("roomUpdated", cb);
   }
@@ -91,4 +97,15 @@ export class NetworkManager {
     this.socket?.off("matchEnded");
     this.socket?.on("matchEnded", cb);
   }
+
+  onGameSound(cb: (soundData: any) => void): void {
+    this.socket?.off("gameSound");
+    this.socket?.on("gameSound", cb);
+  }
+
+  onLobbySound(cb: (soundData: any) => void): void {
+    this.socket?.off("lobbySound");
+    this.socket?.on("lobbySound", cb);
+  }
 }
+
